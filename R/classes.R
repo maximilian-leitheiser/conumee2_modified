@@ -144,7 +144,7 @@ setReplaceMethod("names", signature(x = "CNV.data"), function(x, value) {
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
 #' @export
 setClass("CNV.analysis", representation(name = "character", date = "character", 
-    anno = "CNV.anno", fit = "list", bin = "list", detail = "list", seg = "list"))
+    anno = "CNV.anno", fit = "list", bin = "list", detail = "list", seg = "list", focal = "list"))
 
 #' @rdname CNV.analysis-class
 #' @param object \code{CNV.analysis} object
