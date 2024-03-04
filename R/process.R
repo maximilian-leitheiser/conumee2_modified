@@ -153,8 +153,14 @@ setMethod("CNV.fit", signature(query = "CNV.data", ref = "CNV.data", anno = "CNV
 
             object@anno <- anno
 
-            object@fit$coef <- data.frame(matrix(ncol = 0, nrow = ncol(ref@intensity)))
+            object@fit$coef <- data.frame(matrix(NA_real_, 
+                                                 nrow = ncol(ref@intensity), 
+                                                 ncol = ncol(query@intensity)))
+            colnames(object@fit$coef) = colnames(query@intensity)
+            rownames(object@fit$coef) = colnames(ref@intensity)
+            
             object@fit$ratio <- data.frame(matrix(ncol = 0, nrow = length(p)))
+            
             for (i in 1:ncol(query@intensity)) {
 
               message(paste(colnames(query@intensity)[i]), " (",round(i/ncol(query@intensity)*100, digits = 3), "%", ")", sep = "")
@@ -165,7 +171,7 @@ setMethod("CNV.fit", signature(query = "CNV.data", ref = "CNV.data", anno = "CNV
               } else {
                 ref.fit <- lm(y ~ . - 1, data = data.frame(y = log2(query@intensity[p,i]), X = log2(ref@intensity[p, r])))
               }
-              object@fit$coef <- cbind(object@fit$coef,as.numeric(ref.fit$coefficients[-1]))
+              object@fit$coef[r, i] = as.numeric(ref.fit$coefficients[-1])
 
               ref.predict <- predict(ref.fit)
               ref.predict[ref.predict < 0] <- 0
