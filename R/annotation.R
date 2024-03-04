@@ -1,5 +1,326 @@
-##### ANNOTATION methods #####
+#### aux functions ####
+# TODO: deal more clearly with genome information, especially XY chromosome in focal detection
+# TODO: make .create_focal_ranges use genome info from anno_object instead of 'Seqinfo(hg19)'
+.create_focal_ranges = function(genome_info){
+  # load Cancer Genome Census information
+  CGC_df = read.csv("/home/leitheim/CNV_analysis/own_stuff/CGC_annotation/Cosmic_CancerGeneCensus_v99_GRCh37.tsv", sep = "\t")
+  rownames(CGC_df) = CGC_df$GENE_SYMBOL
+  CGC_df = CGC_df[!(is.na(CGC_df$GENOME_START) | is.na(CGC_df$GENOME_STOP)), ]
+  
+  # adapt to GRCh37 sequence names to hg19 (as used in rest of package)
+  CGC_df$CHROMOSOME = paste0("chr", CGC_df$CHROMOSOME)
+  
+  # remove genes that are not on chromosomes currently included (relevant in particular for chrX, chrY)
+  CGC_df = CGC_df[CGC_df$CHROMOSOME %in% genome_info$chr, ]
+  
+  # create GRanges object
+  non_meta_colnames_CGC = c("CHROMOSOME", "GENOME_START", "GENOME_STOP")
+  CGC_ranges = GRanges(seqnames = CGC_df$CHROMOSOME,
+                       ranges = IRanges(start = CGC_df$GENOME_START,
+                                        end = CGC_df$GENOME_STOP,
+                                        names = CGC_df$GENE_SYMBOL),
+                       strand = "*",
+                       seqinfo = Seqinfo(seqnames = genome_info$chr, 
+                                         seqlengths = genome_info$size),
+                       mcols = CGC_df[, -match(non_meta_colnames_CGC, colnames(CGC_df))])
+  
+  colnames(mcols(CGC_ranges)) = str_remove(colnames(mcols(CGC_ranges)), pattern = "mcols.")
+  
+  # return
+  return(CGC_ranges)
+}
 
+
+
+
+.create_detail_ranges = function(genome_info, detail_regions){
+  
+  ## empty detail ranges
+  if(is.null(detail_regions)){
+    detail_ranges = GRanges(seqinfo = Seqinfo(genome_info$chr, genome_info$size))
+    return(detail_ranges)
+  }
+  
+  ## filled detail ranges
+  if (class(detail_regions) == "GRanges") {
+    detail_ranges <- GRanges(as.vector(seqnames(detail_regions)),
+                             ranges(detail_regions), seqinfo = Seqinfo(genome_info$chr,
+                                                                       genome_info$size))
+    if (any(grepl("name", names(values(detail_regions))))) {
+      values(detail_ranges)$name <- values(detail_regions)[[grep("name",
+                                                                 names(values(detail_regions)))[1]]]
+    }
+    if (any(grepl("IRanges", sapply(values(detail_regions), class)))) {
+      values(detail_ranges)$thick <- values(detail_regions)[[grep("IRanges",
+                                                                  sapply(values(detail_regions), class))[1]]]
+    }
+    detail_ranges <- sort(detail_ranges)
+  } else {
+    detail_ranges <- sort(rtracklayer::import(detail_regions, seqinfo = Seqinfo(genome_info$chr,
+                                                                                genome_info$size)))
+  }
+  if (!is.element("name", names(values(detail_ranges)))) {
+    stop("detailed region bed file must contain name column.")
+  }
+  if (!all(table(values(detail_ranges)$name) == 1)) {
+    stop("detailed region names must be unique.")
+  }
+  
+  if (!is.element("thick", names(values(detail_ranges)))) {
+    values(detail_ranges)$thick <- resize(ranges(detail_ranges), fix = "center",
+                                          1e+06)
+  }
+  
+  return(detail_ranges)
+}
+
+
+
+.create_anno_human = function(anno_object, array_type, chrXY, detail_regions, exclude_regions, 
+                              bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06){
+  
+  if (chrXY) {
+    anno_object@genome <- data.frame(chr = paste("chr", c(1:22, "X", "Y"),
+                                            sep = ""), stringsAsFactors = FALSE)
+  } else {
+    anno_object@genome <- data.frame(chr = paste("chr", 1:22, sep = ""),
+                                stringsAsFactors = FALSE)
+  }
+  
+  rownames(anno_object@genome) <- anno_object@genome$chr
+  
+  message("using hg19 genome annotations from UCSC")
+  
+  tbl.chromInfo <- tbl_ucsc$chromInfo[match(anno_object@genome$chr, tbl_ucsc$chromInfo$chrom),
+                                      "size"]
+  anno_object@genome$size <- tbl.chromInfo
+  
+  tbl.gap <- tbl_ucsc$gap[is.element(tbl_ucsc$gap$chrom, anno_object@genome$chr),]
+  
+  
+  anno_object@gap <- sort(GRanges(as.vector(tbl.gap$chrom), IRanges(tbl.gap$chromStart +
+                                                                 1, tbl.gap$chromEnd), seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size)))
+  
+  tbl.cytoBand <- tbl_ucsc$cytoBand[is.element(tbl_ucsc$cytoBand$chrom,
+                                               anno_object@genome$chr), ]
+  
+  # find the gap that is overlapping with the end of the last p-band, use
+  # center of that gap for indicating centromers in the genome plots
+  pq <- sapply(split(tbl.cytoBand$chromEnd[grepl("p", tbl.cytoBand$name)],
+                     as.vector(tbl.cytoBand$chrom[grepl("p", tbl.cytoBand$name)])),
+               max)
+  anno_object@genome$pq <- start(resize(subsetByOverlaps(anno_object@gap, GRanges(names(pq),
+                                                                        IRanges(pq, pq))), 1, fix = "center"))
+  
+  probes450k <- probesEPIC <- probesEPICv2 <- GRanges()
+  if (is.element(array_type, c("450k", "overlap"))) {
+    message("getting 450k annotations")
+    data("UCSC_RefGene_Name_450k")
+    probes450k <- minfi::getLocations(IlluminaHumanMethylation450kanno.ilmn12.hg19::IlluminaHumanMethylation450kanno.ilmn12.hg19)
+    probes450k$genes <- UCSC_RefGene_Name_450k
+    probes450k <- sort(probes450k)
+  }
+  if (is.element(array_type, c("EPIC", "overlap"))) {
+    message("getting EPIC annotations")
+    data("UCSC_RefGene_Name_EPIC")
+    probesEPIC <- minfi::getLocations(IlluminaHumanMethylationEPICanno.ilm10b4.hg19::IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+    probesEPIC$genes <- UCSC_RefGene_Name_EPIC
+    probesEPIC <- sort(probesEPIC)
+  }
+  
+  if (is.element(array_type, "EPICv2")) {
+    message("getting EPICv2 annotations")
+    data("EPICv2_hg19_probes")
+    probesEPICv2 <- sort(EPICv2_hg19_probes)
+  }
+  
+  if (array_type == "overlap") {
+    probes <- sort(subsetByOverlaps(probes450k, probesEPIC))
+  } else {
+    probes <- unique(sort(c(probes450k, probesEPIC, probesEPICv2)))
+  }
+  
+  
+  # CpG probes only
+  ao_probes <- probes[substr(names(probes), 1, 2) == "cg" & is.element(as.vector(seqnames(probes)), anno_object@genome$chr)]
+  anno_object@probes <- sort(GRanges(as.vector(seqnames(ao_probes)), ranges(ao_probes),
+                                seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size)))
+  anno_object@probes$genes <- ao_probes$genes
+  
+  message(" - ", length(anno_object@probes), " probes used")
+  
+  ## exclude regions
+  if (!is.null(exclude_regions)) {
+    message("importing regions to exclude from analysis")
+    if (class(exclude_regions) == "GRanges") {
+      anno_object@exclude <- GRanges(as.vector(seqnames(exclude_regions)),
+                                ranges(exclude_regions), seqinfo = Seqinfo(anno_object@genome$chr,
+                                                                           anno_object@genome$size))
+      values(anno_object@exclude) <- values(exclude_regions)
+      anno_object@exclude <- sort(anno_object@exclude)
+    } else {
+      anno_object@exclude <- sort(rtracklayer::import(exclude_regions,
+                                                 seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size)))
+    }
+  } else {
+    anno_object@exclude <- GRanges(seqinfo = Seqinfo(anno_object@genome$chr,
+                                                anno_object@genome$size))
+  }
+  
+  ## detail region
+  message("importing regions for detailed analysis")
+  anno_object@detail = .create_detail_ranges(genome_info = anno_object@genome, 
+                                             detail_regions = detail_regions)
+  
+  ## cancer genes
+  message("importing cancer-related genes for focal analysis")
+  anno_object@cancer_genes = .create_focal_ranges(genome_info = anno_object@genome)
+  
+  ## creating bins
+  message("creating bins")
+  anno.tile <- CNV.create_bins(hg19.anno = anno_object@genome, bin_minsize = bin_minsize,
+                               hg19.gap = anno_object@gap, hg19.exclude = anno_object@exclude)
+  message(" - ", length(anno.tile), " bins created")
+  
+  message("merging bins")
+  anno_object@bins <- CNV.merge_bins(hg19.anno = anno_object@genome, hg19.tile = anno.tile,
+                                bin_minprobes = bin_minprobes, hg19.probes = anno_object@probes, bin_maxsize = bin_maxsize)
+  message(" - ", length(anno_object@bins), " bins remaining")
+  
+  message("getting the gene annotations for each bin")
+  
+  o <- findOverlaps(anno_object@probes, anno_object@bins)
+  bin_genes <- sapply(lapply(sapply(split(anno_object@probes$genes[queryHits(o)], names(anno_object@bins)[subjectHits(o)]),
+                                    function(x) na.omit(unlist(strsplit(x,split = ";")))), unique), paste, collapse = ";")
+  
+  
+  
+  anno_object@bins$genes <- bin_genes
+  
+  return(anno_object)
+}
+
+
+
+.create_anno_mouse = function(anno_object, chrXY, exclude_regions, detail_regions, array_type,
+                              bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06){
+  
+  data("mouse_annotation")
+  
+  if (chrXY) {
+    anno_object@genome <- data.frame(chr = paste("chr", c(1:19, "X", "Y"),
+                                            sep = ""), stringsAsFactors = FALSE)
+  } else {
+    anno_object@genome <- data.frame(chr = paste("chr", 1:19, sep = ""),
+                                stringsAsFactors = FALSE)
+  }
+  
+  rownames(anno_object@genome) <- anno_object@genome$chr
+  
+  message("using mm10 genome annotations from UCSC")
+  
+  anno_object@genome$size <- mouse_annotation[[1]]$size[1:nrow(anno_object@genome)]
+  
+  tbl.gap <- mouse_annotation[[2]][is.element(mouse_annotation[[2]]$chrom, anno_object@genome$chr),]
+  
+  anno_object@gap <- sort(GRanges(as.vector(tbl.gap$chrom), IRanges(tbl.gap$chromStart + 1,
+                                                               tbl.gap$chromEnd), seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size)))
+  
+  
+  mouse_probes <- GRanges(as.vector(paste("chr",mouse_annotation[[3]]$CHR, sep = "")),
+                          IRanges(start = mouse_annotation[[3]]$MAPINFO,
+                                  end = mouse_annotation[[3]]$MAPINFO), seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size, genome = "mm10"))
+  
+  names(mouse_probes) <- mouse_annotation[[3]]$Name
+  mouse_probes$genes <- mouse_annotation[[3]]$genes
+  
+  
+  # CpG probes only
+  mouse_probes <- mouse_probes[substr(names(mouse_probes),1, 2) == "cg" & is.element(as.vector(seqnames(mouse_probes)), anno_object@genome$chr)]
+  seqlevels(mouse_probes)<- c(paste("chr", 1:19, sep = ""), "chrY", "chrX")
+  mouse_probes <- sort(mouse_probes)
+  
+  anno_object@probes <- mouse_probes
+  
+  message(" - ", length(anno_object@probes), " probes used")
+  
+  if (!is.null(exclude_regions)) {
+    message("importing regions to exclude from analysis")
+    if (class(exclude_regions) == "GRanges") {
+      anno_object@exclude <- GRanges(as.vector(seqnames(exclude_regions)),
+                                ranges(exclude_regions), seqinfo = Seqinfo(anno_object@genome$chr,
+                                                                           anno_object@genome$size))
+      values(anno_object@exclude) <- values(exclude_regions)
+      anno_object@exclude <- sort(anno_object@exclude)
+    } else {
+      anno_object@exclude <- sort(rtracklayer::import(exclude_regions,
+                                                 seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size)))
+    }
+  } else {
+    anno_object@exclude <- GRanges(seqinfo = Seqinfo(anno_object@genome$chr,
+                                                anno_object@genome$size))
+  }
+  
+  if (!is.null(detail_regions)) {
+    message("importing regions for detailed analysis")
+    if (class(detail_regions) == "GRanges") {
+      anno_object@detail <- GRanges(as.vector(seqnames(detail_regions)),
+                               ranges(detail_regions), seqinfo = Seqinfo(anno_object@genome$chr,
+                                                                         anno_object@genome$size))
+      if (any(grepl("name", names(values(detail_regions))))) {
+        values(anno_object@detail)$name <- values(detail_regions)[[grep("name",
+                                                                   names(values(detail_regions)))[1]]]
+      }
+      if (any(grepl("IRanges", sapply(values(detail_regions), class)))) {
+        values(anno_object@detail)$thick <- values(detail_regions)[[grep("IRanges",
+                                                                    sapply(values(detail_regions), class))[1]]]
+      }
+      anno_object@detail <- sort(anno_object@detail)
+    } else {
+      anno_object@detail <- sort(rtracklayer::import(detail_regions, seqinfo = Seqinfo(anno_object@genome$chr,
+                                                                                  anno_object@genome$size)))
+    }
+    if (!is.element("name", names(values(anno_object@detail)))) {
+      stop("detailed region bed file must contain name column.")
+    }
+    if (!all(table(values(anno_object@detail)$name) == 1)) {
+      stop("detailed region names must be unique.")
+    }
+  } else {
+    anno_object@detail <- GRanges(seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size))
+  }
+  if (!is.element("thick", names(values(anno_object@detail)))) {
+    values(anno_object@detail)$thick <- resize(ranges(anno_object@detail), fix = "center",
+                                          1e+06)
+  }
+  
+  message("creating bins")
+  anno.tile <- CNV.create_bins(hg19.anno = anno_object@genome, bin_minsize = bin_minsize,
+                               hg19.gap = anno_object@gap, hg19.exclude = anno_object@exclude)
+  message(" - ", length(anno.tile), " bins created")
+  
+  message("merging bins")
+  anno_object@bins <- CNV.merge_bins(hg19.anno = anno_object@genome, hg19.tile = anno.tile,
+                                bin_minprobes = bin_minprobes, hg19.probes = anno_object@probes, bin_maxsize = bin_maxsize)
+  message(" - ", length(anno_object@bins), " bins remaining")
+  
+  message("getting the gene annotations for each bin")
+  
+  o <- findOverlaps(anno_object@probes, anno_object@bins)
+  bin_genes <- sapply(lapply(sapply(split(anno_object@probes$genes[queryHits(o)], names(anno_object@bins)[subjectHits(o)]),
+                                    function(x) na.omit(unlist(strsplit(x,split = ";")))), unique), paste, collapse = ";")
+  
+  
+  anno_object@bins$genes <- bin_genes
+  
+  return(anno_object)
+}
+
+
+
+
+
+#### main functions ####
 #' @import minfi
 #' @import IlluminaHumanMethylation450kmanifest
 #' @import IlluminaHumanMethylation450kanno.ilmn12.hg19
@@ -10,6 +331,8 @@
 #' @import GenomeInfoDb
 #' @importFrom rtracklayer import
 NULL
+
+
 
 #' CNV.create_anno
 #' @description Create annotations for CNV analysis.
@@ -46,265 +369,29 @@ CNV.create_anno <- function(bin_minprobes = 15, bin_minsize = 50000, bin_maxsize
       stop("array_type must be on of 450k, EPIC, EPICv2, mouse or overlap")
     }
 
-  #mouse beginning
-    if( array_type == "mouse") {
 
-      data("mouse_annotation")
-
-      if (chrXY) {
-        object@genome <- data.frame(chr = paste("chr", c(1:19, "X", "Y"),
-                                                sep = ""), stringsAsFactors = FALSE)
-      } else {
-        object@genome <- data.frame(chr = paste("chr", 1:19, sep = ""),
-                                    stringsAsFactors = FALSE)
-      }
-
-      rownames(object@genome) <- object@genome$chr
-
-      message("using mm10 genome annotations from UCSC")
-
-      object@genome$size <- mouse_annotation[[1]]$size[1:nrow(object@genome)]
-
-      tbl.gap <- mouse_annotation[[2]][is.element(mouse_annotation[[2]]$chrom, object@genome$chr),]
-
-      object@gap <- sort(GRanges(as.vector(tbl.gap$chrom), IRanges(tbl.gap$chromStart + 1,
-                         tbl.gap$chromEnd), seqinfo = Seqinfo(object@genome$chr, object@genome$size)))
-
-
-      mouse_probes <- GRanges(as.vector(paste("chr",mouse_annotation[[3]]$CHR, sep = "")),
-                              IRanges(start = mouse_annotation[[3]]$MAPINFO,
-                                      end = mouse_annotation[[3]]$MAPINFO), seqinfo = Seqinfo(object@genome$chr, object@genome$size, genome = "mm10"))
-
-      names(mouse_probes) <- mouse_annotation[[3]]$Name
-      mouse_probes$genes <- mouse_annotation[[3]]$genes
-
-
-      # CpG probes only
-      mouse_probes <- mouse_probes[substr(names(mouse_probes),1, 2) == "cg" & is.element(as.vector(seqnames(mouse_probes)), object@genome$chr)]
-      seqlevels(mouse_probes)<- c(paste("chr", 1:19, sep = ""), "chrY", "chrX")
-      mouse_probes <- sort(mouse_probes)
-
-      object@probes <- mouse_probes
-
-      message(" - ", length(object@probes), " probes used")
-
-      if (!is.null(exclude_regions)) {
-        message("importing regions to exclude from analysis")
-        if (class(exclude_regions) == "GRanges") {
-          object@exclude <- GRanges(as.vector(seqnames(exclude_regions)),
-                                    ranges(exclude_regions), seqinfo = Seqinfo(object@genome$chr,
-                                                                               object@genome$size))
-          values(object@exclude) <- values(exclude_regions)
-          object@exclude <- sort(object@exclude)
-        } else {
-          object@exclude <- sort(rtracklayer::import(exclude_regions,
-                                                     seqinfo = Seqinfo(object@genome$chr, object@genome$size)))
-        }
-      } else {
-        object@exclude <- GRanges(seqinfo = Seqinfo(object@genome$chr,
-                                                    object@genome$size))
-      }
-
-      if (!is.null(detail_regions)) {
-        message("importing regions for detailed analysis")
-        if (class(detail_regions) == "GRanges") {
-          object@detail <- GRanges(as.vector(seqnames(detail_regions)),
-                                   ranges(detail_regions), seqinfo = Seqinfo(object@genome$chr,
-                                                                             object@genome$size))
-          if (any(grepl("name", names(values(detail_regions))))) {
-            values(object@detail)$name <- values(detail_regions)[[grep("name",
-                                                                       names(values(detail_regions)))[1]]]
-          }
-          if (any(grepl("IRanges", sapply(values(detail_regions), class)))) {
-            values(object@detail)$thick <- values(detail_regions)[[grep("IRanges",
-                                                                        sapply(values(detail_regions), class))[1]]]
-          }
-          object@detail <- sort(object@detail)
-        } else {
-          object@detail <- sort(rtracklayer::import(detail_regions, seqinfo = Seqinfo(object@genome$chr,
-                                                                                      object@genome$size)))
-        }
-        if (!is.element("name", names(values(object@detail)))) {
-          stop("detailed region bed file must contain name column.")
-        }
-        if (!all(table(values(object@detail)$name) == 1)) {
-          stop("detailed region names must be unique.")
-        }
-      } else {
-        object@detail <- GRanges(seqinfo = Seqinfo(object@genome$chr, object@genome$size))
-      }
-      if (!is.element("thick", names(values(object@detail)))) {
-        values(object@detail)$thick <- resize(ranges(object@detail), fix = "center",
-                                              1e+06)
-      }
-
-      message("creating bins")
-      anno.tile <- CNV.create_bins(hg19.anno = object@genome, bin_minsize = bin_minsize,
-                                   hg19.gap = object@gap, hg19.exclude = object@exclude)
-      message(" - ", length(anno.tile), " bins created")
-
-      message("merging bins")
-      object@bins <- CNV.merge_bins(hg19.anno = object@genome, hg19.tile = anno.tile,
-                                    bin_minprobes = bin_minprobes, hg19.probes = object@probes, bin_maxsize = bin_maxsize)
-      message(" - ", length(object@bins), " bins remaining")
-
-      message("getting the gene annotations for each bin")
-
-      o <- findOverlaps(object@probes, object@bins)
-      bin_genes <- sapply(lapply(sapply(split(object@probes$genes[queryHits(o)], names(object@bins)[subjectHits(o)]),
-                                        function(x) na.omit(unlist(strsplit(x,split = ";")))), unique), paste, collapse = ";")
-
-
-      object@bins$genes <- bin_genes
-
-      return(object)
-      }
-    #mouse end
-
-    else {
-
-      if (chrXY) {
-        object@genome <- data.frame(chr = paste("chr", c(1:22, "X", "Y"),
-                                                sep = ""), stringsAsFactors = FALSE)
-      } else {
-        object@genome <- data.frame(chr = paste("chr", 1:22, sep = ""),
-                                    stringsAsFactors = FALSE)
-      }
-
-    rownames(object@genome) <- object@genome$chr
-
-    message("using hg19 genome annotations from UCSC")
-
-    tbl.chromInfo <- tbl_ucsc$chromInfo[match(object@genome$chr, tbl_ucsc$chromInfo$chrom),
-        "size"]
-    object@genome$size <- tbl.chromInfo
-
-    tbl.gap <- tbl_ucsc$gap[is.element(tbl_ucsc$gap$chrom, object@genome$chr),]
-
-
-    object@gap <- sort(GRanges(as.vector(tbl.gap$chrom), IRanges(tbl.gap$chromStart +
-        1, tbl.gap$chromEnd), seqinfo = Seqinfo(object@genome$chr, object@genome$size)))
-
-    tbl.cytoBand <- tbl_ucsc$cytoBand[is.element(tbl_ucsc$cytoBand$chrom,
-        object@genome$chr), ]
-
-    # find the gap that is overlapping with the end of the last p-band, use
-    # center of that gap for indicating centromers in the genome plots
-    pq <- sapply(split(tbl.cytoBand$chromEnd[grepl("p", tbl.cytoBand$name)],
-        as.vector(tbl.cytoBand$chrom[grepl("p", tbl.cytoBand$name)])),
-        max)
-    object@genome$pq <- start(resize(subsetByOverlaps(object@gap, GRanges(names(pq),
-        IRanges(pq, pq))), 1, fix = "center"))
-
-    probes450k <- probesEPIC <- probesEPICv2 <- GRanges()
-    if (is.element(array_type, c("450k", "overlap"))) {
-      message("getting 450k annotations")
-      data("UCSC_RefGene_Name_450k")
-      probes450k <- minfi::getLocations(IlluminaHumanMethylation450kanno.ilmn12.hg19::IlluminaHumanMethylation450kanno.ilmn12.hg19)
-      probes450k$genes <- UCSC_RefGene_Name_450k
-      probes450k <- sort(probes450k)
-    }
-    if (is.element(array_type, c("EPIC", "overlap"))) {
-      message("getting EPIC annotations")
-      data("UCSC_RefGene_Name_EPIC")
-      probesEPIC <- minfi::getLocations(IlluminaHumanMethylationEPICanno.ilm10b4.hg19::IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
-      probesEPIC$genes <- UCSC_RefGene_Name_EPIC
-      probesEPIC <- sort(probesEPIC)
-    }
-
-    if (is.element(array_type, "EPICv2")) {
-      message("getting EPICv2 annotations")
-      data("EPICv2_hg19_probes")
-      probesEPICv2 <- sort(EPICv2_hg19_probes)
-    }
-
-    if (array_type == "overlap") {
-      probes <- sort(subsetByOverlaps(probes450k, probesEPIC))
+    if(array_type == "mouse") {
+      object = .create_anno_mouse(anno_object = object, 
+                                  array_type = array_type,
+                                  chrXY = chrXY, 
+                                  exclude_regions = exclude_regions, 
+                                  detail_regions = detail_regions,
+                                  bin_minprobes = bin_minprobes, 
+                                  bin_minsize = bin_minsize, 
+                                  bin_maxsize = bin_maxsize)
     } else {
-      probes <- unique(sort(c(probes450k, probesEPIC, probesEPICv2)))
+      object = .create_anno_human(anno_object = object, 
+                                  array_type = array_type,
+                                  chrXY = chrXY, 
+                                  exclude_regions = exclude_regions,
+                                  detail_regions = detail_regions,
+                                  bin_minprobes = bin_minprobes, 
+                                  bin_minsize = bin_minsize, 
+                                  bin_maxsize = bin_maxsize)
     }
-
-
-    # CpG probes only
-    ao_probes <- probes[substr(names(probes), 1, 2) == "cg" & is.element(as.vector(seqnames(probes)), object@genome$chr)]
-    object@probes <- sort(GRanges(as.vector(seqnames(ao_probes)), ranges(ao_probes),
-                                  seqinfo = Seqinfo(object@genome$chr, object@genome$size)))
-    object@probes$genes <- ao_probes$genes
-
-    message(" - ", length(object@probes), " probes used")
-
-    if (!is.null(exclude_regions)) {
-      message("importing regions to exclude from analysis")
-      if (class(exclude_regions) == "GRanges") {
-        object@exclude <- GRanges(as.vector(seqnames(exclude_regions)),
-                                  ranges(exclude_regions), seqinfo = Seqinfo(object@genome$chr,
-                                                                             object@genome$size))
-        values(object@exclude) <- values(exclude_regions)
-        object@exclude <- sort(object@exclude)
-      } else {
-        object@exclude <- sort(rtracklayer::import(exclude_regions,
-                                                   seqinfo = Seqinfo(object@genome$chr, object@genome$size)))
-      }
-    } else {
-      object@exclude <- GRanges(seqinfo = Seqinfo(object@genome$chr,
-                                                  object@genome$size))
-    }
-
-    if (!is.null(detail_regions)) {
-      message("importing regions for detailed analysis")
-      if (class(detail_regions) == "GRanges") {
-        object@detail <- GRanges(as.vector(seqnames(detail_regions)),
-                                 ranges(detail_regions), seqinfo = Seqinfo(object@genome$chr,
-                                                                           object@genome$size))
-        if (any(grepl("name", names(values(detail_regions))))) {
-          values(object@detail)$name <- values(detail_regions)[[grep("name",
-                                                                     names(values(detail_regions)))[1]]]
-        }
-        if (any(grepl("IRanges", sapply(values(detail_regions), class)))) {
-          values(object@detail)$thick <- values(detail_regions)[[grep("IRanges",
-                                                                      sapply(values(detail_regions), class))[1]]]
-        }
-        object@detail <- sort(object@detail)
-      } else {
-        object@detail <- sort(rtracklayer::import(detail_regions, seqinfo = Seqinfo(object@genome$chr,
-                                                                                    object@genome$size)))
-      }
-      if (!is.element("name", names(values(object@detail)))) {
-        stop("detailed region bed file must contain name column.")
-      }
-      if (!all(table(values(object@detail)$name) == 1)) {
-        stop("detailed region names must be unique.")
-      }
-    } else {
-      object@detail <- GRanges(seqinfo = Seqinfo(object@genome$chr, object@genome$size))
-    }
-    if (!is.element("thick", names(values(object@detail)))) {
-      values(object@detail)$thick <- resize(ranges(object@detail), fix = "center",
-                                            1e+06)
-    }
-
-    message("creating bins")
-    anno.tile <- CNV.create_bins(hg19.anno = object@genome, bin_minsize = bin_minsize,
-        hg19.gap = object@gap, hg19.exclude = object@exclude)
-    message(" - ", length(anno.tile), " bins created")
-
-    message("merging bins")
-    object@bins <- CNV.merge_bins(hg19.anno = object@genome, hg19.tile = anno.tile,
-        bin_minprobes = bin_minprobes, hg19.probes = object@probes, bin_maxsize = bin_maxsize)
-    message(" - ", length(object@bins), " bins remaining")
-
-    message("getting the gene annotations for each bin")
-
-    o <- findOverlaps(object@probes, object@bins)
-    bin_genes <- sapply(lapply(sapply(split(object@probes$genes[queryHits(o)], names(object@bins)[subjectHits(o)]),
-                               function(x) na.omit(unlist(strsplit(x,split = ";")))), unique), paste, collapse = ";")
-
-
-
-    object@bins$genes <- bin_genes
-
+    
     return(object)
-}}
+}
 
 
 #' CNV.create_bins
@@ -315,14 +402,14 @@ CNV.create_anno <- function(bin_minprobes = 15, bin_minsize = 50000, bin_maxsize
 #' @param hg19.exclude foo
 #' @return \code{GRanges} object.
 CNV.create_bins <- function(hg19.anno, bin_minsize = 50000, hg19.gap, hg19.exclude) {
-    hg19.tile <- sort(tileGenome(Seqinfo(hg19.anno$chr, hg19.anno$size),
-        tilewidth = bin_minsize, cut.last.tile.in.chrom = TRUE))
-    # setdiff for gaps (on every second window to avoid merging)
-    hg19.tile <- sort(c(setdiff(hg19.tile[seq(1, length(hg19.tile), 2)],
-        hg19.gap), setdiff(hg19.tile[seq(2, length(hg19.tile), 2)], hg19.gap)))
-    # setdiff for exluded regions
-    hg19.tile <- sort(c(setdiff(hg19.tile[seq(1, length(hg19.tile), 2)],
-        hg19.exclude), setdiff(hg19.tile[seq(2, length(hg19.tile), 2)],
+  hg19.tile <- sort(tileGenome(Seqinfo(hg19.anno$chr, hg19.anno$size),
+                               tilewidth = bin_minsize, cut.last.tile.in.chrom = TRUE))
+  # setdiff for gaps (on every second window to avoid merging)
+  hg19.tile <- sort(c(setdiff(hg19.tile[seq(1, length(hg19.tile), 2)],
+                              hg19.gap), setdiff(hg19.tile[seq(2, length(hg19.tile), 2)], hg19.gap)))
+  # setdiff for exluded regions
+  hg19.tile <- sort(c(setdiff(hg19.tile[seq(1, length(hg19.tile), 2)],
+                              hg19.exclude), setdiff(hg19.tile[seq(2, length(hg19.tile), 2)],
         hg19.exclude)))
     return(hg19.tile)
 }

@@ -1,5 +1,93 @@
 ##### PROCESSING methods #####
 
+# TODO: use genomic information in annotation instead of 'Seqinfo(genome = "hg19")'
+CNV.focal_own = function(object, segment_mean_amp_cutoff = 0.4, segment_mean_del_cutoff = -0.4, segment_length_cutoff = 3*10^6){
+  
+  # initialize result lists
+  object@focal$ratio_amp <- vector(mode = "list", length = length(object@seg$summary))
+  object@focal$ratio_del <- vector(mode = "list", length = length(object@seg$summary))
+  
+  names(object@focal$ratio_amp) = names(object@seg$summary)
+  names(object@focal$ratio_del) = names(object@seg$summary)
+  
+  # iterate over samples
+  for(i in seq_along(object@seg$summary)) {
+    # construct GRanges object for segmentation
+    segment_df = object@seg$summary[[i]]
+    
+    # NOTE: this is actually GRCh37, but now treated as hg19
+    non_meta_colnames_seg = c("chrom", "loc.start", "loc.end")
+    segment_ranges = GRanges(seqnames = segment_df$chrom, 
+                             ranges = IRanges(start = segment_df$loc.start, 
+                                              end = segment_df$loc.end), 
+                             strand = "*", 
+                             seqinfo = Seqinfo(seqnames = object@anno@genome$chr, 
+                                               seqlengths = object@anno@genome$size),
+                             mcols = segment_df[, -match(non_meta_colnames_seg, colnames(segment_df))])
+    colnames(mcols(segment_ranges)) = str_remove(colnames(mcols(segment_ranges)), pattern = "mcols.")
+    
+    # define amplified and deleted segments
+    mcols(segment_ranges)$is_amp = (end(segment_ranges) - start(segment_ranges) <= segment_length_cutoff) & (segment_ranges$seg.median >= segment_mean_amp_cutoff)
+    mcols(segment_ranges)$is_del = (end(segment_ranges) - start(segment_ranges) <= segment_length_cutoff) & (segment_ranges$seg.median <= segment_mean_del_cutoff)
+    
+    
+    # make list of gene of interests (combining cancer genes and genes provided as detail region)
+    # TODO: do this in a prettier way, maybe also by harmonizing 'name' and 'GENE_SYMBOL' in creation of both GRanges object
+    cancer_ranges = object@anno@cancer_genes
+    cancer_ranges$CGC_or_detail = "CGC"
+    
+    if(length(object@anno@detail) > 0){
+      detail_ranges = object@anno@detail
+      detail_ranges$CGC_or_detail = "detail"
+      detail_ranges$GENE_SYMBOL = detail_ranges$name
+      detail_ranges$name = NULL
+      detail_ranges$thick = NULL
+      
+      genes_interest_ranges = c(detail_ranges[!detail_ranges$GENE_SYMBOL %in% cancer_ranges$GENE_SYMBOL],
+                                cancer_ranges)
+    } else {
+      genes_interest_ranges = cancer_ranges
+    }
+    
+    
+
+    # find associated genes within the potential gene list
+    amp_gene_ranges = subsetByOverlaps(genes_interest_ranges, segment_ranges[segment_ranges$is_amp])
+    del_gene_ranges = subsetByOverlaps(genes_interest_ranges, segment_ranges[segment_ranges$is_del])
+    
+    
+    # compute probe median for identified amplified genes
+    if(length(amp_gene_ranges) == 0){
+      object@focal$ratio_amp[[i]] = numeric(0)
+    } else {
+      d1 = as.matrix(findOverlaps(query = amp_gene_ranges, subject = object@anno@probes))
+      d2 = data.frame(gene = amp_gene_ranges$GENE_SYMBOL[d1[,"queryHits"]], probe = names(object@anno@probes[d1[, "subjectHits"]]),stringsAsFactors = FALSE)
+      
+      object@focal$ratio_amp[[i]] <- sapply(split(object@fit$ratio[d2[, "probe"], i],
+                                                  d2[, "gene"]),
+                                            median, na.rm = TRUE)
+    }
+    
+    
+    
+    # compute probe median for identified deleted genes
+    if(length(del_gene_ranges) == 0){
+      object@focal$ratio_del[[i]] = numeric(0)
+    } else {
+      d1 = as.matrix(findOverlaps(query = del_gene_ranges, subject = object@anno@probes))
+      d2 = data.frame(gene = del_gene_ranges$GENE_SYMBOL[d1[,"queryHits"]], probe = names(object@anno@probes[d1[, "subjectHits"]]),stringsAsFactors = FALSE)
+      
+      object@focal$ratio_del[[i]] <- sapply(split(object@fit$ratio[d2[, "probe"], i],
+                                                  d2[, "gene"]),
+                                            median, na.rm = TRUE)
+    }
+    
+  }
+  
+  return(object)
+}
+
+
 
 
 #' CNV.fit

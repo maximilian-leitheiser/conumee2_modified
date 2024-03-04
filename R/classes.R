@@ -15,7 +15,7 @@
 #' @export
 setClass("CNV.anno", representation(date = "character", args = "list", 
     genome = "data.frame", gap = "GRanges", probes = "GRanges", exclude = "GRanges", 
-    detail = "GRanges", bins = "GRanges"))
+    detail = "GRanges", cancer_genes = "GRanges", bins = "GRanges"))
 
 #' @rdname CNV.anno-class
 #' @importFrom methods show

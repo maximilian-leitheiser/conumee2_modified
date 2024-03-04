@@ -94,7 +94,7 @@ setMethod("CNV.load", signature(input = "numeric"), function(input, names = NULL
 
     if (is.null(names(input)))
         stop("intensities not given for all probes.")
-    object@intensity <- data.frame(sampleid = input)
+    object@intensity <- data.frame(unnamed_sample = input)
     if (!is.null(names))
         names(object) <- names
 
