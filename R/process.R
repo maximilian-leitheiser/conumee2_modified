@@ -1,5 +1,7 @@
 ##### PROCESSING methods #####
 
+# TODO: CNV.detail: Is check against gene with no probes (as in CNV.focal_own) necessary?
+# TODO: write function for d1/d2 median computation
 # TODO: use genomic information in annotation instead of 'Seqinfo(genome = "hg19")'
 CNV.focal_own = function(object, segment_mean_amp_cutoff = 0.4, segment_mean_del_cutoff = -0.4, segment_length_cutoff = 3*10^6){
   
@@ -61,11 +63,19 @@ CNV.focal_own = function(object, segment_mean_amp_cutoff = 0.4, segment_mean_del
       object@focal$ratio_amp[[i]] = numeric(0)
     } else {
       d1 = as.matrix(findOverlaps(query = amp_gene_ranges, subject = object@anno@probes))
-      d2 = data.frame(gene = amp_gene_ranges$GENE_SYMBOL[d1[,"queryHits"]], probe = names(object@anno@probes[d1[, "subjectHits"]]),stringsAsFactors = FALSE)
       
-      object@focal$ratio_amp[[i]] <- sapply(split(object@fit$ratio[d2[, "probe"], i],
-                                                  d2[, "gene"]),
-                                            median, na.rm = TRUE)
+      if(nrow(d1) == 0){
+        # if no probes match gene, then set result by hand (otherwise list is returned instead of vector, which results in error downstream)
+        object@focal$ratio_amp[[i]] = numeric(0)
+      } else {
+        # otherwise compute normally
+        d2 = data.frame(gene = amp_gene_ranges$GENE_SYMBOL[d1[,"queryHits"]], probe = names(object@anno@probes[d1[, "subjectHits"]]),stringsAsFactors = FALSE)
+        
+        object@focal$ratio_amp[[i]] <- sapply(split(object@fit$ratio[d2[, "probe"], i],
+                                                    d2[, "gene"]),
+                                              median, na.rm = TRUE)
+      }
+
     }
     
     
@@ -75,11 +85,19 @@ CNV.focal_own = function(object, segment_mean_amp_cutoff = 0.4, segment_mean_del
       object@focal$ratio_del[[i]] = numeric(0)
     } else {
       d1 = as.matrix(findOverlaps(query = del_gene_ranges, subject = object@anno@probes))
-      d2 = data.frame(gene = del_gene_ranges$GENE_SYMBOL[d1[,"queryHits"]], probe = names(object@anno@probes[d1[, "subjectHits"]]),stringsAsFactors = FALSE)
       
-      object@focal$ratio_del[[i]] <- sapply(split(object@fit$ratio[d2[, "probe"], i],
-                                                  d2[, "gene"]),
-                                            median, na.rm = TRUE)
+      if(nrow(d1) == 0 ){
+        # if no probes match gene, then set result by hand (otherwise list is returned instead of vector, which results in error downstream)
+        object@focal$ratio_del[[i]] = numeric(0)
+      } else {
+        # otherwise compute normally
+        d2 = data.frame(gene = del_gene_ranges$GENE_SYMBOL[d1[,"queryHits"]], probe = names(object@anno@probes[d1[, "subjectHits"]]),stringsAsFactors = FALSE)
+        
+        object@focal$ratio_del[[i]] <- sapply(split(object@fit$ratio[d2[, "probe"], i],
+                                                    d2[, "gene"]),
+                                              median, na.rm = TRUE)
+      }
+      
     }
     
   }

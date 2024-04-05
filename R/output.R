@@ -439,6 +439,7 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
       #                   object@focal$ratio_del[[i]][!names(object@focal$ratio_del[[i]]) %in% duplicated_gene_vec]) 
       # ranges_nondupl = object@anno@cancer_genes[object@anno@cancer_genes$GENE_SYMBOL %in% names(ratio_nondupl)]
       
+      
       .plot_gene_range_ratios_human(gene_ranges = object@anno@cancer_genes, 
                                     gene_ratio_vec = c(object@focal$ratio_amp[[i]], 
                                                        object@focal$ratio_del[[i]]),

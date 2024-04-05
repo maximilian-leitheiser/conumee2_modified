@@ -77,7 +77,7 @@
 
 
 .create_anno_human = function(anno_object, array_type, chrXY, detail_regions, exclude_regions, 
-                              bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06){
+                              bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06, custom_probe_set = NULL){
   
   if (chrXY) {
     anno_object@genome <- data.frame(chr = paste("chr", c(1:22, "X", "Y"),
@@ -138,6 +138,18 @@
     probes <- sort(subsetByOverlaps(probes450k, probesEPIC))
   } else {
     probes <- unique(sort(c(probes450k, probesEPIC, probesEPICv2)))
+  }
+  
+  if(!is.null(custom_probe_set)){
+    # check for unmatched probes
+    unmatched_probe_vec = setdiff(custom_probe_set, names(probes))
+    if(length(unmatched_probe_vec) > 0){
+      stop(length(unmatched_probe_vec), " probes in custom_probe_set are not present in the probe set of the chosen chip type.")
+    }
+    
+    # reduce chip probe set to custom probe set
+    probes = probes[custom_probe_set]
+    probes = sort(unique(probes))
   }
   
   
@@ -352,7 +364,7 @@ NULL
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}, Bjarne Daenekas
 #' @export
 CNV.create_anno <- function(bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06,
-    array_type = "450k", exclude_regions = NULL, detail_regions = NULL, chrXY = FALSE) {
+    array_type = "450k", exclude_regions = NULL, detail_regions = NULL, chrXY = FALSE, custom_probe_set = NULL) {
     object <- new("CNV.anno")
     object@date <- date()
 
@@ -387,7 +399,8 @@ CNV.create_anno <- function(bin_minprobes = 15, bin_minsize = 50000, bin_maxsize
                                   detail_regions = detail_regions,
                                   bin_minprobes = bin_minprobes, 
                                   bin_minsize = bin_minsize, 
-                                  bin_maxsize = bin_maxsize)
+                                  bin_maxsize = bin_maxsize,
+                                  custom_probe_set = custom_probe_set)
     }
     
     return(object)
