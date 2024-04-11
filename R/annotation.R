@@ -77,7 +77,11 @@
 
 
 .create_anno_human = function(anno_object, array_type, chrXY, detail_regions, exclude_regions, 
-                              bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06, custom_probe_set = NULL){
+                              bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06, custom_probe_set = NULL, ref_gene = c("hg19", "hg38")){
+  
+  
+  ref_gene = match.arg(ref_gene)
+  
   
   if (chrXY) {
     anno_object@genome <- data.frame(chr = paste("chr", c(1:22, "X", "Y"),
@@ -89,50 +93,127 @@
   
   rownames(anno_object@genome) <- anno_object@genome$chr
   
-  message("using hg19 genome annotations from UCSC")
+  if(ref_gene == "hg19"){
+    cur_tbl_UCSC = tbl_ucsc
+    message("using hg19 genome annotations from UCSC")
+  } else {
+    # TODO: How to access tbl_UCSC_hg38 properly?
+    cur_tbl_UCSC = conumee2.modified::tbl_UCSC_hg38
+    message("using hg38 genome annotations from UCSC")
+  }
   
-  tbl.chromInfo <- tbl_ucsc$chromInfo[match(anno_object@genome$chr, tbl_ucsc$chromInfo$chrom),
+  
+  tbl.chromInfo <- cur_tbl_UCSC$chromInfo[match(anno_object@genome$chr, cur_tbl_UCSC$chromInfo$chrom),
                                       "size"]
   anno_object@genome$size <- tbl.chromInfo
   
-  tbl.gap <- tbl_ucsc$gap[is.element(tbl_ucsc$gap$chrom, anno_object@genome$chr),]
+  tbl.gap <- cur_tbl_UCSC$gap[is.element(cur_tbl_UCSC$gap$chrom, anno_object@genome$chr),]
   
   
   anno_object@gap <- sort(GRanges(as.vector(tbl.gap$chrom), IRanges(tbl.gap$chromStart +
                                                                  1, tbl.gap$chromEnd), seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size)))
   
-  tbl.cytoBand <- tbl_ucsc$cytoBand[is.element(tbl_ucsc$cytoBand$chrom,
-                                               anno_object@genome$chr), ]
   
-  # find the gap that is overlapping with the end of the last p-band, use
-  # center of that gap for indicating centromers in the genome plots
-  pq <- sapply(split(tbl.cytoBand$chromEnd[grepl("p", tbl.cytoBand$name)],
-                     as.vector(tbl.cytoBand$chrom[grepl("p", tbl.cytoBand$name)])),
-               max)
-  anno_object@genome$pq <- start(resize(subsetByOverlaps(anno_object@gap, GRanges(names(pq),
-                                                                        IRanges(pq, pq))), 1, fix = "center"))
   
-  probes450k <- probesEPIC <- probesEPICv2 <- GRanges()
-  if (is.element(array_type, c("450k", "overlap"))) {
-    message("getting 450k annotations")
-    data("UCSC_RefGene_Name_450k")
-    probes450k <- minfi::getLocations(IlluminaHumanMethylation450kanno.ilmn12.hg19::IlluminaHumanMethylation450kanno.ilmn12.hg19)
-    probes450k$genes <- UCSC_RefGene_Name_450k
-    probes450k <- sort(probes450k)
-  }
-  if (is.element(array_type, c("EPIC", "overlap"))) {
-    message("getting EPIC annotations")
-    data("UCSC_RefGene_Name_EPIC")
-    probesEPIC <- minfi::getLocations(IlluminaHumanMethylationEPICanno.ilm10b4.hg19::IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
-    probesEPIC$genes <- UCSC_RefGene_Name_EPIC
-    probesEPIC <- sort(probesEPIC)
+  if(ref_gene == "hg19"){
+    # find the gap that is overlapping with the end of the last p-band, use
+    # center of that gap for indicating centromers in the genome plots
+    
+    tbl.cytoBand <- cur_tbl_UCSC$cytoBand[is.element(cur_tbl_UCSC$cytoBand$chrom,
+                                                     anno_object@genome$chr), ]
+    
+    pq <- sapply(split(tbl.cytoBand$chromEnd[grepl("p", tbl.cytoBand$name)],
+                       as.vector(tbl.cytoBand$chrom[grepl("p", tbl.cytoBand$name)])),
+                 max)
+    
+    anno_object@genome$pq <- start(resize(subsetByOverlaps(anno_object@gap, GRanges(names(pq),
+                                                                                    IRanges(pq, pq))), 1, fix = "center"))
+  } else if (ref_gene == "hg38"){
+    # use centromers table directly (centromers are not included in gap table for hg38 anymore)
+    # combine multiple centromere entries per chromosome and get most extreme values
+    centromere_table = cur_tbl_UCSC$centromeres %>% 
+      group_by(chrom) %>% 
+      dplyr::summarise(start = min(chromStart), end = max(chromEnd)) %>% 
+      mutate(middle = (start+end)/2)
+
+    anno_object@genome$pq = centromere_table$middle[match(anno_object@genome$chr, centromere_table$chrom)]
+    
+      
+  } else {
+    stop("reference genome not recognized")
   }
   
-  if (is.element(array_type, "EPICv2")) {
-    message("getting EPICv2 annotations")
-    data("EPICv2_hg19_probes")
-    probesEPICv2 <- sort(EPICv2_hg19_probes)
+  
+  
+  
+  if(ref_gene == "hg19"){
+    # TODO: this is simply the old code
+    # TODO: EPICv2 is in facto NOT hg19. THis should be corrected/harmonized
+    
+    probes450k <- probesEPIC <- probesEPICv2 <- GRanges()
+    if (is.element(array_type, c("450k", "overlap"))) {
+      message("getting 450k annotations")
+      data("UCSC_RefGene_Name_450k")
+      probes450k <- minfi::getLocations(IlluminaHumanMethylation450kanno.ilmn12.hg19::IlluminaHumanMethylation450kanno.ilmn12.hg19)
+      probes450k$genes <- UCSC_RefGene_Name_450k
+      probes450k <- sort(probes450k)
+    }
+    if (is.element(array_type, c("EPIC", "overlap"))) {
+      message("getting EPIC annotations")
+      data("UCSC_RefGene_Name_EPIC")
+      probesEPIC <- minfi::getLocations(IlluminaHumanMethylationEPICanno.ilm10b4.hg19::IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+      probesEPIC$genes <- UCSC_RefGene_Name_EPIC
+      probesEPIC <- sort(probesEPIC)
+    }
+    
+    if (is.element(array_type, "EPICv2")) {
+      message("getting EPICv2 annotations")
+      data("EPICv2_hg19_probes")
+      probesEPICv2 <- sort(EPICv2_hg19_probes)
+    }
+    
+  } else if(ref_gene == "hg38") {
+    # TODO: 'genes' are still missing
+    # TODO: sesameDataGet should maybe not be used in this package that way
+    
+    probes450k <- probesEPIC <- probesEPICv2 <- GRanges()
+    
+    if (is.element(array_type, c("450k", "overlap"))) {
+      message("getting 450k annotations")
+      probes450k <- sesameData::sesameDataGet("HM450.address")$hg38
+      probes450k <- sort(probes450k, ignore.strand = TRUE)
+      probes450k$genes = "NA"
+    }
+    if (is.element(array_type, c("EPIC", "overlap"))) {
+      message("getting EPIC annotations")
+      probesEPIC <- sesameData::sesameDataGet("EPIC.address")$hg38
+      probesEPIC <- sort(probesEPIC, ignore.strand = TRUE)
+      probesEPIC$genes = "NA"
+    }
+    
+    if (is.element(array_type, "EPICv2")) {
+      message("getting EPICv2 annotations")
+      probesEPICv2 <- sesameData::sesameDataGet("EPICv2.address")$hg38
+      probesEPICv2 <- sort(probesEPIC, ignore.strand = TRUE)
+      probesEPICv2$genes = "NA"
+      
+      # TODO: collapsing is done inefficiently
+      is_ctl_probe = grepl(pattern = "ctl", x = names(probesEPICv2))
+      prefix_vec = names(probesEPICv2)
+      prefix_vec[!is_ctl_probe]  = sapply(str_split(names(probesEPICv2[!is_ctl_probe]), "_"), head, 1)
+      
+      probes_EPICv2_coll = probesEPICv2[!duplicated(prefix_vec)]
+      is_ctl_probe = grepl(pattern = "ctl", x = names(probes_EPICv2_coll))
+      names(probes_EPICv2_coll)[!is_ctl_probe] = sapply(str_split(names(probes_EPICv2_coll)[!is_ctl_probe], "_"), head, 1)
+      
+      probesEPICv2 <- sort(probesEPICv2, ignore.strand = TRUE)
+    }
+    
+  } else {
+    stop("reference genome not recognized")
   }
+  
+  
   
   if (array_type == "overlap") {
     probes <- sort(subsetByOverlaps(probes450k, probesEPIC))
@@ -180,11 +261,13 @@
   }
   
   ## detail region
+  # TODO: does not work yet for hg38
   message("importing regions for detailed analysis")
   anno_object@detail = .create_detail_ranges(genome_info = anno_object@genome, 
                                              detail_regions = detail_regions)
   
   ## cancer genes
+  # TODO: does not work yet for hg38
   message("importing cancer-related genes for focal analysis")
   anno_object@cancer_genes = .create_focal_ranges(genome_info = anno_object@genome)
   
@@ -199,8 +282,9 @@
                                 bin_minprobes = bin_minprobes, hg19.probes = anno_object@probes, bin_maxsize = bin_maxsize)
   message(" - ", length(anno_object@bins), " bins remaining")
   
-  message("getting the gene annotations for each bin")
   
+  # TODO: does not work yet for hg38 (because genes annotation is not right yet)
+  message("getting the gene annotations for each bin")
   o <- findOverlaps(anno_object@probes, anno_object@bins)
   bin_genes <- sapply(lapply(sapply(split(anno_object@probes$genes[queryHits(o)], names(anno_object@bins)[subjectHits(o)]),
                                     function(x) na.omit(unlist(strsplit(x,split = ";")))), unique), paste, collapse = ";")
@@ -364,10 +448,12 @@ NULL
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}, Bjarne Daenekas
 #' @export
 CNV.create_anno <- function(bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06,
-    array_type = "450k", exclude_regions = NULL, detail_regions = NULL, chrXY = FALSE, custom_probe_set = NULL) {
+    array_type = "450k", ref_gene = c("hg19", "hg38"), exclude_regions = NULL, detail_regions = NULL, chrXY = FALSE, custom_probe_set = NULL) {
     object <- new("CNV.anno")
     object@date <- date()
 
+    ref_gene = match.arg(ref_gene)
+    
     a1 <- formals()
     a2 <- as.list(match.call())[-1]
     object@args <- as.list(sapply(unique(names(c(a1, a2))), function(an) if (is.element(an,
@@ -400,7 +486,8 @@ CNV.create_anno <- function(bin_minprobes = 15, bin_minsize = 50000, bin_maxsize
                                   bin_minprobes = bin_minprobes, 
                                   bin_minsize = bin_minsize, 
                                   bin_maxsize = bin_maxsize,
-                                  custom_probe_set = custom_probe_set)
+                                  custom_probe_set = custom_probe_set,
+                                  ref_gene = ref_gene)
     }
     
     return(object)

@@ -15,7 +15,9 @@ Imports:
     rtracklayer,
     GenomicRanges,
     IRanges,
-    GenomeInfoDb
+    GenomeInfoDb,
+    sesameData,
+    stringr
 Depends:
     R (>= 3.5.0),
     minfi,
