@@ -194,7 +194,7 @@
     if (is.element(array_type, "EPICv2")) {
       message("getting EPICv2 annotations")
       probesEPICv2 <- sesameData::sesameDataGet("EPICv2.address")$hg38
-      probesEPICv2 <- sort(probesEPIC, ignore.strand = TRUE)
+      probesEPICv2 <- sort(probesEPICv2, ignore.strand = TRUE)
       probesEPICv2$genes = "NA"
       
       # TODO: collapsing is done inefficiently
