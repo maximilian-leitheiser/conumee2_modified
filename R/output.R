@@ -62,9 +62,9 @@
   }
   
   # prepare detail ratio values for plotting
-  gene_ratio_vec = .shift_truncate_ratio(ratio_vec = gene_ratio_vec,
-                                         shift = ratio_shift,
-                                         y_min = ylim[1],  y_max = ylim[2])
+  gene_ratio_vec = .shift_truncate_vals(value_vec = gene_ratio_vec,
+                                        shift = ratio_shift,
+                                        y_min = ylim[1],  y_max = ylim[2])
 
   # exclude specified genes from ratio_vec
   if(!is.null(exclude_gene_names)){
@@ -131,9 +131,9 @@
 .plot_bin_ratios = function(object, i, ylim, bins_cex, cols, chr.cumsum0){
 
   # prepare ratio values
-  bin.ratio = .shift_truncate_ratio(ratio_vec = object@bin$ratio[[i]],
-                                    shift = object@bin$shift[i],
-                                    y_min = ylim[1], y_max = ylim[2])
+  bin.ratio = .shift_truncate_vals(value_vec = object@bin$ratio[[i]],
+                                   shift = object@bin$shift[i],
+                                   y_min = ylim[1], y_max = ylim[2])
 
 
   # compute size of point marker (dependent on variance)
@@ -141,7 +141,7 @@
   p_size = .get_p_size(var_vec = object@bin$variance[[i]][names(object@anno@bins)], bins_cex = bins_cex)
 
   # get color for each bin ratio
-  bin.ratio.cols = .get_ratio_colors(ratio_vec = bin.ratio, cols = cols, ylim = ylim)
+  bin.ratio.cols = .get_colors_for_value(value_vec = bin.ratio, cols = cols, ylim = ylim)
 
   # plot points for each bin ratio value
   lines(x = chr.cumsum0[as.vector(seqnames(object@anno@bins))] + values(object@anno@bins)$midpoint,
@@ -151,9 +151,9 @@
 
 
 
-.get_ratio_colors = function(ratio_vec, cols, ylim){
+.get_colors_for_value = function(value_vec, cols, ylim){
 
-  rgb_mat = colorRamp(cols)((ratio_vec + max(abs(ylim)))/(2 *max(abs(ylim))))
+  rgb_mat = colorRamp(cols)((value_vec + max(abs(ylim)))/(2 *max(abs(ylim))))
   hex_triplet_vec = apply(rgb_mat, 1,
                           function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
 
@@ -174,14 +174,14 @@
 
 
 
-.shift_truncate_ratio = function(ratio_vec, shift, y_min, y_max){
+.shift_truncate_vals = function(value_vec, shift, y_min, y_max){
   # shift
-  ratio_vec = ratio_vec - shift
+  value_vec = value_vec - shift
 
   # truncate
-  ratio_vec = pmin(pmax(ratio_vec, y_min), y_max)
+  value_vec = pmin(pmax(value_vec, y_min), y_max)
 
-  return(ratio_vec)
+  return(value_vec)
 }
 
 
@@ -223,29 +223,42 @@
 
 
 
-.plot_canvas = function(object, i, chr, ylim, main, centromere){
-  chr.cumsum0 <- .cumsum0(object@anno@genome[chr, "size"], n = chr)
-
-
-  plot(NA, xlim = c(0, sum(as.numeric(object@anno@genome[chr, "size"])) -
+.plot_canvas_minimal = function(chr_length_vec, chr_pq_vec, chr_name_vec, ylim, main, centromere){
+  # cumsum
+  chr.cumsum0 <- .cumsum0(chr_length_vec, n = chr_name_vec)
+  
+  # plotting
+  plot(NA, xlim = c(0, sum(as.numeric(chr_length_vec)) -
                       0), ylim = ylim, xaxs = "i", xaxt = "n", yaxt = "n", xlab = NA,
-       ylab = NA, main = main[i])
-  abline(v = .cumsum0(object@anno@genome[chr, "size"], right = TRUE),
+       ylab = NA, main = main)
+  
+  abline(v = .cumsum0(chr_length_vec, right = TRUE),
          col = "grey")
+  
   if (centromere) {
-    abline(v = .cumsum0(object@anno@genome[chr, "size"]) + object@anno@genome[chr,"pq"],
+    abline(v = chr.cumsum0 + chr_pq_vec,
            col = "grey", lty = 2)
   }
-
-  axis(1, at = .cumsum0(object@anno@genome[chr, "size"]) + object@anno@genome[chr, "size"]/2,
-       labels = object@anno@genome[chr, "chr"],
+  
+  axis(1, at = chr.cumsum0 + chr_length_vec/2,
+       labels = chr_name_vec,
        las = 2)
-
+  
   if (all(ylim == c(-1.25, 1.25))) {
     axis(2, at = round(seq(-1.2, 1.2, 0.4), 1), las = 2)
   } else {
     axis(2, las = 2)
   }
+}
+
+
+
+.plot_canvas = function(object, chr, ylim, main, centromere){
+  
+  .plot_canvas_minimal(chr_length_vec = object@anno@genome[chr, "size"], 
+                       chr_pq_vec = object@anno@genome[chr, "pq"],
+                       chr_name_vec = object@anno@genome[chr, "chr"],
+                       main = main, ylim = ylim, centromere = centromere)
 }
 
 
@@ -362,8 +375,8 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
     
     
     ## plot canvas
-    .plot_canvas(object = object, i = i, chr = chr, 
-                 ylim = ylim, main = main, centromere = centromere)
+    .plot_canvas(object = object, chr = chr, 
+                 ylim = ylim, main = main[[i]], centromere = centromere)
     
     ## plot log2 ratios
     .plot_bin_ratios(object = object, i = i, ylim = ylim, bins_cex = bins_cex,

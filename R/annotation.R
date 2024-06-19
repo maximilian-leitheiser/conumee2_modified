@@ -77,73 +77,13 @@
 
 
 .create_anno_human = function(anno_object, array_type, chrXY, detail_regions, exclude_regions, 
-                              bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06, custom_probe_set = NULL, ref_gene = c("hg19", "hg38")){
+                              bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06, 
+                              custom_probe_set = NULL, ref_gene = c("hg19", "hg38"), cg_probes_only = FALSE){
   
-  
-  ref_gene = match.arg(ref_gene)
-  
-  
-  if (chrXY) {
-    anno_object@genome <- data.frame(chr = paste("chr", c(1:22, "X", "Y"),
-                                            sep = ""), stringsAsFactors = FALSE)
-  } else {
-    anno_object@genome <- data.frame(chr = paste("chr", 1:22, sep = ""),
-                                stringsAsFactors = FALSE)
-  }
-  
-  rownames(anno_object@genome) <- anno_object@genome$chr
-  
-  if(ref_gene == "hg19"){
-    cur_tbl_UCSC = tbl_ucsc
-    message("using hg19 genome annotations from UCSC")
-  } else {
-    # TODO: How to access tbl_UCSC_hg38 properly?
-    cur_tbl_UCSC = conumee2.modified::tbl_UCSC_hg38
-    message("using hg38 genome annotations from UCSC")
-  }
-  
-  
-  tbl.chromInfo <- cur_tbl_UCSC$chromInfo[match(anno_object@genome$chr, cur_tbl_UCSC$chromInfo$chrom),
-                                      "size"]
-  anno_object@genome$size <- tbl.chromInfo
-  
-  tbl.gap <- cur_tbl_UCSC$gap[is.element(cur_tbl_UCSC$gap$chrom, anno_object@genome$chr),]
-  
-  
-  anno_object@gap <- sort(GRanges(as.vector(tbl.gap$chrom), IRanges(tbl.gap$chromStart +
-                                                                 1, tbl.gap$chromEnd), seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size)))
-  
-  
-  
-  if(ref_gene == "hg19"){
-    # find the gap that is overlapping with the end of the last p-band, use
-    # center of that gap for indicating centromers in the genome plots
-    
-    tbl.cytoBand <- cur_tbl_UCSC$cytoBand[is.element(cur_tbl_UCSC$cytoBand$chrom,
-                                                     anno_object@genome$chr), ]
-    
-    pq <- sapply(split(tbl.cytoBand$chromEnd[grepl("p", tbl.cytoBand$name)],
-                       as.vector(tbl.cytoBand$chrom[grepl("p", tbl.cytoBand$name)])),
-                 max)
-    
-    anno_object@genome$pq <- start(resize(subsetByOverlaps(anno_object@gap, GRanges(names(pq),
-                                                                                    IRanges(pq, pq))), 1, fix = "center"))
-  } else if (ref_gene == "hg38"){
-    # use centromers table directly (centromers are not included in gap table for hg38 anymore)
-    # combine multiple centromere entries per chromosome and get most extreme values
-    centromere_table = cur_tbl_UCSC$centromeres %>% 
-      group_by(chrom) %>% 
-      dplyr::summarise(start = min(chromStart), end = max(chromEnd)) %>% 
-      mutate(middle = (start+end)/2)
-
-    anno_object@genome$pq = centromere_table$middle[match(anno_object@genome$chr, centromere_table$chrom)]
-    
-      
-  } else {
-    stop("reference genome not recognized")
-  }
-  
-  
+  # get genome info (chromosome dataframe and gap ranges )
+  tmp_list = .get_genome_info_and_gap(ref_gene = ref_gene, chrXY = chrXY)
+  anno_object@genome = tmp_list$genome
+  anno_object@gap = tmp_list$gap
   
   
   if(ref_gene == "hg19"){
@@ -235,7 +175,13 @@
   
   
   # CpG probes only
-  ao_probes <- probes[substr(names(probes), 1, 2) == "cg" & is.element(as.vector(seqnames(probes)), anno_object@genome$chr)]
+  if(cg_probes_only){
+    allowed_prefix_set = c("cg")
+  } else {
+    allowed_prefix_set = c("cg", "ch")
+  }
+  
+  ao_probes <- probes[substr(names(probes), 1, 2) %in% allowed_prefix_set & is.element(as.vector(seqnames(probes)), anno_object@genome$chr)]
   anno_object@probes <- sort(GRanges(as.vector(seqnames(ao_probes)), ranges(ao_probes),
                                 seqinfo = Seqinfo(anno_object@genome$chr, anno_object@genome$size)))
   anno_object@probes$genes <- ao_probes$genes
@@ -414,6 +360,81 @@
 
 
 
+.get_genome_info_and_gap = function(ref_gene = c("hg19", "hg38"), chrXY = FALSE){
+
+  # parse arguments
+  ref_gene = match.arg(ref_gene)
+  
+  # set sequence names
+  if (chrXY) {
+    genome_info <- data.frame(chr = paste("chr", c(1:22, "X", "Y"), sep = ""), 
+                              stringsAsFactors = FALSE)
+  } else {
+    genome_info <- data.frame(chr = paste("chr", 1:22, sep = ""),
+                              stringsAsFactors = FALSE)
+  }
+  
+  rownames(genome_info) <- genome_info$chr
+  
+  if(ref_gene == "hg19"){
+    cur_tbl_UCSC = tbl_ucsc
+    message("using hg19 genome annotations from UCSC")
+  } else {
+    # TODO: How to access tbl_UCSC_hg38 properly?
+    cur_tbl_UCSC = conumee2.modified::tbl_UCSC_hg38
+    message("using hg38 genome annotations from UCSC")
+  }
+  
+  
+  tbl.chromInfo <- cur_tbl_UCSC$chromInfo[match(genome_info$chr, cur_tbl_UCSC$chromInfo$chrom),
+                                          "size"]
+  genome_info$size <- tbl.chromInfo
+  
+  tbl.gap <- cur_tbl_UCSC$gap[is.element(cur_tbl_UCSC$gap$chrom, genome_info$chr),]
+  
+  
+  gap_ranges <- sort(GRanges(as.vector(tbl.gap$chrom), IRanges(tbl.gap$chromStart +
+                                                                 1, tbl.gap$chromEnd),
+                             seqinfo = Seqinfo(genome_info$chr, genome_info$size)))
+  
+  
+  
+  if(ref_gene == "hg19"){
+    # find the gap that is overlapping with the end of the last p-band, use
+    # center of that gap for indicating centromers in the genome plots
+    
+    tbl.cytoBand <- cur_tbl_UCSC$cytoBand[is.element(cur_tbl_UCSC$cytoBand$chrom,
+                                                     genome_info$chr), ]
+    
+    pq <- sapply(split(tbl.cytoBand$chromEnd[grepl("p", tbl.cytoBand$name)],
+                       as.vector(tbl.cytoBand$chrom[grepl("p", tbl.cytoBand$name)])),
+                 max)
+    
+    genome_info$pq <- start(resize(subsetByOverlaps(gap_ranges, 
+                                                    GRanges(names(pq),
+                                                            IRanges(pq, pq))), 
+                                   1, 
+                                   fix = "center"))
+    
+  } else if (ref_gene == "hg38"){
+    # use centromers table directly (centromers are not included in gap table for hg38 anymore)
+    # combine multiple centromere entries per chromosome and get most extreme values
+    centromere_table = cur_tbl_UCSC$centromeres %>% 
+      group_by(chrom) %>% 
+      dplyr::summarise(start = min(chromStart), end = max(chromEnd)) %>% 
+      mutate(middle = (start+end)/2)
+    
+    genome_info$pq = centromere_table$middle[match(genome_info$chr, centromere_table$chrom)]
+    
+    
+  } else {
+    stop("reference genome not recognized")
+  }
+  
+  out = list(genome = genome_info, gap = gap_ranges)
+  return(out)
+}
+
 
 
 #### main functions ####
@@ -448,7 +469,8 @@ NULL
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}, Bjarne Daenekas
 #' @export
 CNV.create_anno <- function(bin_minprobes = 15, bin_minsize = 50000, bin_maxsize = 5e+06,
-    array_type = "450k", ref_gene = c("hg19", "hg38"), exclude_regions = NULL, detail_regions = NULL, chrXY = FALSE, custom_probe_set = NULL) {
+    array_type = "450k", ref_gene = c("hg19", "hg38"), exclude_regions = NULL, detail_regions = NULL, chrXY = FALSE, 
+    custom_probe_set = NULL, cg_probes_only = FALSE) {
     object <- new("CNV.anno")
     object@date <- date()
 
@@ -487,7 +509,8 @@ CNV.create_anno <- function(bin_minprobes = 15, bin_minsize = 50000, bin_maxsize
                                   bin_minsize = bin_minsize, 
                                   bin_maxsize = bin_maxsize,
                                   custom_probe_set = custom_probe_set,
-                                  ref_gene = ref_gene)
+                                  ref_gene = ref_gene,
+                                  cg_probes_only = cg_probes_only)
     }
     
     return(object)
