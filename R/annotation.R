@@ -3,7 +3,7 @@
 # TODO: make .create_focal_ranges use genome info from anno_object instead of 'Seqinfo(hg19)'
 .create_focal_ranges = function(genome_info){
   # load Cancer Genome Census information
-  CGC_df = Cosmic_CancerGeneCensus_v99_GRCh37
+  CGC_df = conumee2.modified::Cosmic_CancerGeneCensus_v99_GRCh37
   rownames(CGC_df) = CGC_df$GENE_SYMBOL
   CGC_df = CGC_df[!(is.na(CGC_df$GENOME_START) | is.na(CGC_df$GENOME_STOP)), ]
   
