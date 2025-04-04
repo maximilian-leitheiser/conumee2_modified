@@ -158,7 +158,8 @@
   if (array_type == "overlap") {
     probes <- sort(subsetByOverlaps(probes450k, probesEPIC))
   } else {
-    probes <- unique(sort(c(probes450k, probesEPIC, probesEPICv2)))
+    probes <- sort(c(probes450k, probesEPIC, probesEPICv2))
+    probes = probes[!duplicated(names(probes))]
   }
   
   if(!is.null(custom_probe_set)){
