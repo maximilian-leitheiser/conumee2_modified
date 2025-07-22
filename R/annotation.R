@@ -146,7 +146,7 @@
       is_ctl_probe = grepl(pattern = "ctl", x = names(probes_EPICv2_coll))
       names(probes_EPICv2_coll)[!is_ctl_probe] = sapply(str_split(names(probes_EPICv2_coll)[!is_ctl_probe], "_"), head, 1)
       
-      probesEPICv2 <- sort(probesEPICv2, ignore.strand = TRUE)
+      probesEPICv2 <- sort(probes_EPICv2_coll, ignore.strand = TRUE)
     }
     
   } else {
