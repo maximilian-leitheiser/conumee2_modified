@@ -166,7 +166,10 @@
     # check for unmatched probes
     unmatched_probe_vec = setdiff(custom_probe_set, names(probes))
     if(length(unmatched_probe_vec) > 0){
-      stop(length(unmatched_probe_vec), " probes in custom_probe_set are not present in the probe set of the chosen chip type.")
+      warning(length(unmatched_probe_vec), 
+              " probes in custom_probe_set are not present in the probe set of the chosen chip type: \n",
+              paste(unmatched_probe_vec[seq_len(min(20, length(unmatched_probe_vec)))], sep = ", "))
+      custom_probe_set = intersect(custom_probe_set, names(probes))
     }
     
     # reduce chip probe set to custom probe set
