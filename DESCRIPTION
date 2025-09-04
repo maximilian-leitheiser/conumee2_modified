@@ -25,6 +25,8 @@ Imports:
     dplyr,
     RCurl,
     basicPlotteR
+Remotes:
+    JosephCrispell/basicPlotteR
 Depends:
     R (>= 3.5.0),
     minfi,
