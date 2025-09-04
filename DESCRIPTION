@@ -17,7 +17,8 @@ Imports:
     IRanges,
     GenomeInfoDb,
     sesameData,
-    stringr
+    stringr,
+    plotly
 Depends:
     R (>= 3.5.0),
     minfi,
