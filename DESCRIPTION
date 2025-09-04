@@ -19,6 +19,11 @@ Imports:
     sesameData,
     stringr,
     plotly
+    minfi,
+    IlluminaHumanMethylation450kanno.ilmn12.hg19,
+    IlluminaHumanMethylationEPICanno.ilm10b4.hg19,
+    dplyr,
+    RCurl
 Depends:
     R (>= 3.5.0),
     minfi,
@@ -49,4 +54,4 @@ Collate:
 biocViews: CopyNumberVariation, DNAMethylation, MethylationArray, Microarray,
     Normalization, Preprocessing, QualityControl, Software
 VignetteBuilder: knitr
-RoxygenNote: 7.1.2
+RoxygenNote: 7.3.2
