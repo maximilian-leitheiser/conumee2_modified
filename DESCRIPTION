@@ -23,7 +23,8 @@ Imports:
     IlluminaHumanMethylation450kanno.ilmn12.hg19,
     IlluminaHumanMethylationEPICanno.ilm10b4.hg19,
     dplyr,
-    RCurl
+    RCurl,
+    basicPlotteR
 Depends:
     R (>= 3.5.0),
     minfi,
