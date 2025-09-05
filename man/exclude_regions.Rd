@@ -4,7 +4,7 @@
 \alias{exclude_regions}
 \title{exclude_regions}
 \description{
-Example of genomic regions to exclude (e.g. known polymorphic regions).
+Example of genomic regions to exclude (e.g. known polymorphic regions). In hg19.
 }
 \details{
 Imported using \code{rtracklayer}. Raw data stored in \code{inst/extdata/exclude_regions.bed}.

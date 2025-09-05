@@ -12,9 +12,9 @@ CNV.genomeplot(object, ...)
   chr = "all",
   centromere = TRUE,
   detail = TRUE,
+  focal = TRUE,
   main = NULL,
   sig_cgenes = FALSE,
-  nsig_cgenes = 3,
   output = "output",
   directory = getwd(),
   ylim = c(-1.25, 1.25),
@@ -23,7 +23,8 @@ CNV.genomeplot(object, ...)
   width = 12,
   height = 6,
   res = 720,
-  cols = c("darkblue", "darkblue", "lightgrey", "#F16729", "#F16729")
+  cols = c("darkblue", "darkblue", "lightgrey", "#F16729", "#F16729"),
+  avoid_overlap = TRUE
 )
 }
 \arguments{
@@ -40,8 +41,6 @@ CNV.genomeplot(object, ...)
 \item{main}{character vector. Title of the plot(s). Default to sample names. Please provide a vector of the same length as the number of samples.}
 
 \item{sig_cgenes}{logical. Should the significant genes from the Cancer Gene Census be plotted that were identified with \code{CNV.focal}? Default to \code{FALSE}.}
-
-\item{nsig_cgenes}{numeric. How many significant genes identified with \code{CNV.focal} should be plotted? Default to \code{3}.}
 
 \item{output}{character. Choose between \code{output} (to display it in the graphical output) or \code{pdf} and \code{png} to save it. Defaults to \code{output}.}
 
@@ -60,6 +59,8 @@ CNV.genomeplot(object, ...)
 \item{res}{numeric. Resolution of the saved .png files. Defaults to \code{720}}
 
 \item{cols}{character vector. Colors to use for plotting intensity levels of bins. Centered around 0. Defaults to \code{c("darkblue","darkblue", "lightgrey", "#F16729", "#F16729")}.}
+
+\item{nsig_cgenes}{numeric. How many significant genes identified with \code{CNV.focal} should be plotted? Default to \code{3}.}
 }
 \value{
 \code{NULL}.

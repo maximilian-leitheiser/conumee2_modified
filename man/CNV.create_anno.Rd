@@ -9,9 +9,12 @@ CNV.create_anno(
   bin_minsize = 50000,
   bin_maxsize = 5e+06,
   array_type = "450k",
+  ref_gene = c("hg19", "hg38"),
   exclude_regions = NULL,
   detail_regions = NULL,
-  chrXY = FALSE
+  chrXY = FALSE,
+  custom_probe_set = NULL,
+  cg_probes_only = FALSE
 )
 }
 \arguments{
