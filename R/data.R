@@ -29,7 +29,6 @@ NULL
 #' @description Example of genomic regions to exclude (e.g. known polymorphic regions). In hg19.
 #' @details Imported using \code{rtracklayer}. Raw data stored in \code{inst/extdata/exclude_regions.bed}.
 #' @author Volker Hovestadt \email{conumee@@hovestadt.bio}
-#' @export
 NULL
 # exclude_regions <- import('inst/extdata/exclude_regions.bed')
 # save(exclude_regions, file = 'data/exclude_regions.rda')
@@ -39,7 +38,6 @@ NULL
 #' @description Example of genomic regions to exclude (e.g. known polymorphic regions). Same as exclude_regions, but for hg38.
 #' @details Created as shown in \code{/make_exclude_region_hg38.R}.
 #' @author Maximilian Leitheiser \email{maximilian.leitheiser@charite.com}
-#' @export
 NULL
 
 
