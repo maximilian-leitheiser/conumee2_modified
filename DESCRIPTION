@@ -46,7 +46,7 @@ Suggests:
     RCurl
 Encoding: UTF-8
 License: GPL (>= 2)
-LazyData: false
+LazyData: true
 Collate:
     classes.R
     annotation.R

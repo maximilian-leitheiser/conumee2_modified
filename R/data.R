@@ -36,7 +36,14 @@ NULL
 #' exclude_regions_hg38
 #' @name exclude_regions_hg38
 #' @description Example of genomic regions to exclude (e.g. known polymorphic regions). Same as exclude_regions, but for hg38.
-#' @details Created as shown in \code{/make_exclude_region_hg38.R}.
+#' @details Created as shown in \code{make_exclude_region_hg38.R}.
+#' @author Maximilian Leitheiser \email{maximilian.leitheiser@charite.com}
+NULL
+
+#' Cosmic_CancerGeneCensus_v99_GRCh37
+#' @name Cosmic_CancerGeneCensus_v99_GRCh37
+#' @description Curated collection of genes with oncological relevance. 
+#' @details Created as shown in \code{make_CGC_dataframe.R}.
 #' @author Maximilian Leitheiser \email{maximilian.leitheiser@charite.com}
 NULL
 

@@ -7,7 +7,7 @@
 Example of genomic regions to exclude (e.g. known polymorphic regions). Same as exclude_regions, but for hg38.
 }
 \details{
-Created as shown in \code{/make_exclude_region_hg38.R}.
+Created as shown in \code{make_exclude_region_hg38.R}.
 }
 \author{
 Maximilian Leitheiser \email{maximilian.leitheiser@charite.com}
