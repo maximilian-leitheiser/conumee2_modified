@@ -24,7 +24,7 @@
                                          seqlengths = genome_info$size),
                        mcols = CGC_df[, -match(non_meta_colnames_CGC, colnames(CGC_df))])
   
-  colnames(mcols(CGC_ranges)) = str_remove(colnames(mcols(CGC_ranges)), pattern = "mcols.")
+  colnames(mcols(CGC_ranges)) = stringr::str_remove(colnames(mcols(CGC_ranges)), pattern = "mcols.")
   
   # return
   return(CGC_ranges)

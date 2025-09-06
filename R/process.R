@@ -3,6 +3,12 @@
 # TODO: CNV.detail: Is check against gene with no probes (as in CNV.focal_own) necessary?
 # TODO: write function for d1/d2 median computation
 # TODO: use genomic information in annotation instead of 'Seqinfo(genome = "hg19")'
+
+
+
+#' CNV.focal_own
+#' @description TODO
+#' @export
 CNV.focal_own = function(object, segment_mean_amp_cutoff = 0.4, segment_mean_del_cutoff = -0.4, segment_length_cutoff = 3*10^6){
   
   # initialize result lists
@@ -26,7 +32,7 @@ CNV.focal_own = function(object, segment_mean_amp_cutoff = 0.4, segment_mean_del
                              seqinfo = Seqinfo(seqnames = object@anno@genome$chr, 
                                                seqlengths = object@anno@genome$size),
                              mcols = segment_df[, -match(non_meta_colnames_seg, colnames(segment_df))])
-    colnames(mcols(segment_ranges)) = str_remove(colnames(mcols(segment_ranges)), pattern = "mcols.")
+    colnames(mcols(segment_ranges)) = stringr::str_remove(colnames(mcols(segment_ranges)), pattern = "mcols.")
     
     # define amplified and deleted segments
     mcols(segment_ranges)$is_amp = (end(segment_ranges) - start(segment_ranges) <= segment_length_cutoff) & (segment_ranges$seg.median >= segment_mean_amp_cutoff)

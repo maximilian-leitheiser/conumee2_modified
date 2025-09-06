@@ -24,7 +24,7 @@ Imports:
     IlluminaHumanMethylationEPICanno.ilm10b4.hg19,
     dplyr,
     RCurl,
-    basicPlotteR
+    stringr
 Remotes:
     JosephCrispell/basicPlotteR
 Depends:
