@@ -9,14 +9,14 @@
   
   if(avoid_overlap){
     # plot labels above point
-    addTextLabels(xCoords = .get_ranges_midpoints_chr_shifted(ranges, chr.cumsum0), 
-                  yCoords = ifelse(ratio.above, ratio_vec, NA), 
-                  labels = values(ranges)[[name_column]], col.label = color, col.line = color)
+    basicPlotteR::addTextLabels(xCoords = .get_ranges_midpoints_chr_shifted(ranges, chr.cumsum0), 
+                                yCoords = ifelse(ratio.above, ratio_vec, NA), 
+                                labels = values(ranges)[[name_column]], col.label = color, col.line = color)
     
     # plot labels below point
-    addTextLabels(xCoords = .get_ranges_midpoints_chr_shifted(ranges, chr.cumsum0), 
-                  yCoords = ifelse(ratio.above, NA, ratio_vec), 
-                  labels = values(ranges)[[name_column]], col.label = color, col.line = color)
+    basicPlotteR::addTextLabels(xCoords = .get_ranges_midpoints_chr_shifted(ranges, chr.cumsum0), 
+                                yCoords = ifelse(ratio.above, NA, ratio_vec), 
+                                labels = values(ranges)[[name_column]], col.label = color, col.line = color)
     
   } else {
     # plot labels above point
