@@ -154,13 +154,13 @@ setGeneric("CNV.fit", function(query, ref, anno, ...) {
 
 #' @rdname CNV.fit
 setMethod("CNV.fit", signature(query = "CNV.data", ref = "CNV.data", anno = "CNV.anno"),
-          function(query, ref, anno, intercept = TRUE) {
+          function(query, ref, anno, intercept = TRUE, verbose = FALSE) {
             if (ncol(query@intensity) == 0)
               stop("query intensities unavailable, run CNV.load")
             if (ncol(ref@intensity) == 0)
               stop("reference set intensities unavailable, run CNV.load")
 
-            if (ncol(query@intensity) != 1)
+            if (ncol(query@intensity) != 1 & verbose)
               message("using multiple query samples")
             if (ncol(ref@intensity) == 1)
               warning("reference set contains only a single sample. use more samples for better results.")
@@ -186,10 +186,12 @@ setMethod("CNV.fit", signature(query = "CNV.data", ref = "CNV.data", anno = "CNV
             object@fit$ratio <- data.frame(matrix(ncol = 0, nrow = length(p)))
             
             for (i in 1:ncol(query@intensity)) {
-
-              message(paste(colnames(query@intensity)[i]), " (",round(i/ncol(query@intensity)*100, digits = 3), "%", ")", sep = "")
+              if(verbose){
+                message(paste(colnames(query@intensity)[i]), " (",round(i/ncol(query@intensity)*100, digits = 3), "%", ")", sep = "")
+              }
+              
               r <- cor(query@intensity[p, ], ref@intensity[p, ])[i, ] < 0.99
-              if (any(!r)) message("query sample seems to also be in the reference set. not used for fit.")
+              if (any(!r)) warning("query sample seems to also be in the reference set. not used for fit.")
               if (intercept) {
                 ref.fit <- lm(y ~ ., data = data.frame(y = log2(query@intensity[p,i]), X = log2(ref@intensity[p, r])))
               } else {
@@ -258,7 +260,7 @@ setGeneric("CNV.bin", function(object, ...) {
 })
 
 #' @rdname CNV.bin
-setMethod("CNV.bin", signature(object = "CNV.analysis"), function(object) {
+setMethod("CNV.bin", signature(object = "CNV.analysis"), function(object, verbose = FALSE) {
   if (length(object@fit) == 0)
     stop("fit unavailable, run CNV.fit")
 
@@ -270,8 +272,9 @@ setMethod("CNV.bin", signature(object = "CNV.analysis"), function(object) {
   object@bin$variance <- vector(mode = "list", length = ncol(object@fit$ratio))
   object@bin$shift <- as.numeric()
   for (i in 1:ncol(object@fit$ratio)) {
-
-    message(paste(colnames(object@fit$ratio)[i]), " (",round(i/ncol(object@fit$ratio)*100, digits = 3), "%", ")", sep = "")
+    if(verbose){
+      message(paste(colnames(object@fit$ratio)[i]), " (",round(i/ncol(object@fit$ratio)*100, digits = 3), "%", ")", sep = "")
+    }
 
     object@bin$ratio[[i]] <- sapply(split(object@fit$ratio[o2[, "probe"],i], o2[,"bin"]),
                                     median, na.rm = TRUE)[names(object@anno@bins)]
@@ -384,7 +387,9 @@ setGeneric("CNV.focal", function(object, ...) {
 })
 
 #' @rdname CNV.focal
-setMethod("CNV.focal", signature(object = "CNV.analysis"), function(object, conf = 0.95, R = 100, blockLength = 500000, proportionLength = TRUE, ...){
+setMethod("CNV.focal", signature(object = "CNV.analysis"), function(object, 
+                                                                    conf = 0.95, R = 100, blockLength = 500000, proportionLength = TRUE, 
+                                                                    verbose = FALSE, ...){
   if(ncol(object@anno@genome) == 2) {
     stop("CNV.focal is not compatible with mouse arrays.")
   }
@@ -397,9 +402,9 @@ setMethod("CNV.focal", signature(object = "CNV.analysis"), function(object, conf
   amp_genes <- vector(mode='list', length=ncol(object@fit$ratio))
   del_genes <- vector(mode='list', length=ncol(object@fit$ratio))
   for(i in 1:ncol(object@fit$ratio)){
-
-    message(paste(colnames(object@fit$ratio)[i]), " (",round(i/ncol(object@fit$ratio)*100, digits = 3), "%", ")", sep = "")
-
+    if(verbose){
+      message(paste(colnames(object@fit$ratio)[i]), " (",round(i/ncol(object@fit$ratio)*100, digits = 3), "%", ")", sep = "")
+    }
     segs <- object@seg$summary[[i]]
     segs <- GRanges(seqnames = segs$chrom, IRanges(start = segs$loc.start, end = segs$loc.end), seqinfo = Seqinfo(genome = "hg19"))
     seqlevels(segs) <- object@anno@genome$chr
@@ -541,7 +546,8 @@ setGeneric("CNV.segment", function(object, ...) {
 #' @rdname CNV.segment
 setMethod("CNV.segment", signature(object = "CNV.analysis"), function(object,
                                                                       alpha = 0.001, nperm = 50000, min.width = 5, undo.splits = "sdundo",
-                                                                      undo.SD = 2.2, verbose = 0, ...) {
+                                                                      undo.SD = 2.2, verbose_DNAcopy = 0, 
+                                                                      verbose = FALSE, ...) {
   if(length(object@fit) == 0){
     stop('fit unavailable, run CNV.fit')
   }
@@ -559,14 +565,15 @@ setMethod("CNV.segment", signature(object = "CNV.analysis"), function(object,
   object@seg$p <- vector(mode = "list", length = ncol(object@fit$ratio))
 
   for (i in 1:ncol(object@fit$ratio)) {
-
-    message(paste(colnames(object@fit$ratio)[i]), " (",round(i/ncol(object@fit$ratio)*100, digits = 3), "%", ")", sep = "")
+    if(verbose){
+      message(paste(colnames(object@fit$ratio)[i]), " (",round(i/ncol(object@fit$ratio)*100, digits = 3), "%", ")", sep = "")
+    }
 
     x1 <- DNAcopy::CNA(genomdat = object@bin$ratio[[i]][names(object@anno@bins)],
                        chrom = as.vector(seqnames(object@anno@bins)), maploc = values(object@anno@bins)$midpoint,
                        data.type = "logratio", sampleid = "sampleid")
 
-    x2 <- DNAcopy::segment(x = x1, weights = 1/object@bin$variance[[i]][names(object@anno@bins)], verbose = verbose, min.width = min.width,
+    x2 <- DNAcopy::segment(x = x1, weights = 1/object@bin$variance[[i]][names(object@anno@bins)], verbose = verbose_DNAcopy, min.width = min.width,
                            nperm = nperm, alpha = alpha, undo.splits = undo.splits, undo.SD = undo.SD,
                            ...)
 

@@ -349,9 +349,7 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
   }
   
   for (i in 1:ncol(object@fit$ratio)) {
-    
-    message(main[i])
-    
+
     ## technical preparations
     if(output == "pdf"){
       p_names <- paste(directory,"/", main,"_genomeplot",".pdf",sep="")
