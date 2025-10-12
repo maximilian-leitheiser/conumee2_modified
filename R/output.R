@@ -52,7 +52,8 @@
 # NOTE: color = "black" for details, color = "red" for focal
 .plot_gene_range_ratios_human = function(gene_ranges, gene_ratio_vec, ratio_shift = 0,
                                          ylim = c(-1.25, 1.25), 
-                                         name_column = "name", color = "black",
+                                         name_column = "name",
+                                         color = "#2B3E51",
                                          chr.cumsum0, 
                                          exclude_gene_names = NULL,
                                          avoid_overlap = avoid_overlap){
@@ -115,20 +116,26 @@
 
 
 
-.plot_segmentation = function(object, i, ylim, chr.cumsum0){
+.plot_segmentation = function(object, i, ylim, chr.cumsum0, 
+                              seg_line_color = "#2B3E51"){
   
   for (l in seq(length(object@seg$summary[[i]]$seg.median))) {
     lines(c(object@seg$summary[[i]]$loc.start[l] + chr.cumsum0[object@seg$summary[[i]]$chrom[l]],
             object@seg$summary[[i]]$loc.end[l] + chr.cumsum0[object@seg$summary[[i]]$chrom[l]]),
           rep(min(ylim[2], max(ylim[1], object@seg$summary[[i]]$seg.median[l])),
-              2) - object@bin$shift[i], col = "darkblue", lwd = 2)
+              2) - object@bin$shift[i], col = seg_line_color, lwd = 2)
   }
   
 }
 
 
 
-.plot_bin_ratios = function(object, i, ylim, bins_cex, cols, chr.cumsum0){
+.plot_bin_ratios = function(object, i, ylim, bins_cex, 
+                            cols = c("#AD494A", "#AD494A","#AD494A","#AD494A", 
+                                     "#ECF0F1", 
+                                     "#74C476","#74C476","#74C476", "#74C476"),
+                                     chr.cumsum0,
+                            point_size_factor = 1){
 
   # prepare ratio values
   bin.ratio = .shift_truncate_vals(value_vec = object@bin$ratio[[i]],
@@ -137,9 +144,13 @@
 
 
   # compute size of point marker (dependent on variance)
-  # NOTE: subsetting by anno-bin-names necesasry for variance?
-  p_size = .get_p_size(var_vec = object@bin$variance[[i]][names(object@anno@bins)], bins_cex = bins_cex)
-
+  # NOTE: subsetting by anno-bin-names necesasary for variance?
+  p_size = .get_p_size(var_vec = object@bin$variance[[i]][names(object@anno@bins)], 
+                       bins_cex = bins_cex)
+  p_size = p_size * point_size_factor
+  print("======== p_size vec ========")
+  print(p_size)
+  
   # get color for each bin ratio
   bin.ratio.cols = .get_colors_for_value(value_vec = bin.ratio, cols = cols, ylim = ylim)
 
@@ -223,42 +234,67 @@
 
 
 
-.plot_canvas_minimal = function(chr_length_vec, chr_pq_vec, chr_name_vec, ylim, main, centromere){
+.plot_canvas_minimal = function(chr_length_vec, chr_pq_vec, chr_name_vec, ylim, main, centromere,
+                                show_plot_title = TRUE,
+                                coord_system_color = "#E8ECEF",
+                                axis_labels_color = "#2C3E51"){
   # cumsum
   chr.cumsum0 <- .cumsum0(chr_length_vec, n = chr_name_vec)
   
   # plotting
-  plot(NA, xlim = c(0, sum(as.numeric(chr_length_vec)) -
-                      0), ylim = ylim, xaxs = "i", xaxt = "n", yaxt = "n", xlab = NA,
-       ylab = NA, main = main)
+  if(!show_plot_title){
+    main = NULL
+  }
+  
+  plot(NA, xlim = c(0, sum(as.numeric(chr_length_vec)) - 0), 
+       ylim = ylim,
+       xaxs = "i", xaxt = "n", yaxt = "n",
+       xlab = NA, ylab = NA,
+       main = main, 
+       fg = coord_system_color)
   
   abline(v = .cumsum0(chr_length_vec, right = TRUE),
-         col = "grey")
+         col = coord_system_color)
   
   if (centromere) {
     abline(v = chr.cumsum0 + chr_pq_vec,
-           col = "grey", lty = 2)
+           col = coord_system_color, 
+           lty = 2)
   }
   
-  axis(1, at = chr.cumsum0 + chr_length_vec/2,
+  axis(1, 
+       at = chr.cumsum0 + chr_length_vec/2,
        labels = chr_name_vec,
-       las = 2)
+       las = 2,
+       col = coord_system_color, 
+       col.axis = axis_labels_color)
   
   if (all(ylim == c(-1.25, 1.25))) {
-    axis(2, at = round(seq(-1.2, 1.2, 0.4), 1), las = 2)
+    axis(2, at = round(seq(-1.2, 1.2, 0.4), 1), las = 2,
+         col = coord_system_color, 
+         col.axis = axis_labels_color)
   } else {
-    axis(2, las = 2)
+    axis(2, las = 2,
+         col = coord_system_color, 
+         col.axis = axis_labels_color)
   }
 }
 
 
 
-.plot_canvas = function(object, chr, ylim, main, centromere){
+.plot_canvas = function(object, chr, ylim, main, centromere,
+                        show_plot_title = TRUE,
+                        coord_system_color = "#E8ECEF",
+                        axis_labels_color = "#2C3E51"){
   
   .plot_canvas_minimal(chr_length_vec = object@anno@genome[chr, "size"], 
                        chr_pq_vec = object@anno@genome[chr, "pq"],
                        chr_name_vec = object@anno@genome[chr, "chr"],
-                       main = main, ylim = ylim, centromere = centromere)
+                       main = main, ylim = ylim, 
+                       centromere = centromere,
+                       show_plot_title = show_plot_title,
+                       coord_system_color = coord_system_color,
+                       axis_labels_color = axis_labels_color)
 }
 
 
@@ -323,7 +359,15 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
                                                                          main = NULL, sig_cgenes = FALSE, output = "output", 
                                                                          directory = getwd(), ylim = c(-1.25, 1.25), bins_cex = "standardized", 
                                                                          set_par = TRUE, width = 12, height = 6, res = 720,
-                                                                         cols = c("darkblue","darkblue", "lightgrey", "#F16729", "#F16729"),
+                                                                         show_plot_title = TRUE,
+                                                                         margin_vec = NULL,
+                                                                         cols = c("#AD494A", "#AD494A","#AD494A","#AD494A", "#ECF0F1", "#74C476","#74C476","#74C476", "#74C476"),
+                                                                         seg_line_color = "#2B3E51",
+                                                                         detail_gene_anno_color = "#2B3E51",
+                                                                         focal_gene_anno_color = "#2B3E51",
+                                                                         axis_labels_color = "#2C3E51",
+                                                                         coord_system_color = "#E8ECEF",
+                                                                         point_size_factor = 1,
                                                                          avoid_overlap = TRUE){
   
   if (length(object@bin) == 0)
@@ -332,12 +376,6 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
     stop("bin unavailable, run CNV.seg")
   if (nrow(object@fit$ratio) < 300000) {
     centromere = FALSE
-  }
-  
-  if (set_par) {
-    mfrow_original <- par()$mfrow
-    mar_original <- par()$mar
-    oma_original <- par()$oma
   }
   
   if (is.null(main)) {
@@ -354,13 +392,27 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
     if(output == "pdf"){
       p_names <- paste(directory,"/", main,"_genomeplot",".pdf",sep="")
       pdf(p_names[i], width = width, height = height)
-      par(mfrow = c(1, 1), mar = c(4, 4, 4, 4), oma = c(0, 0, 0, 0))
     }
     
     if(output == "png"){
       p_names <- paste(directory,"/", main[i],"_genomeplot",".png",sep="")
       png(p_names, units = "in", width = width, height = height, res = res)
-      par(mfrow = c(1, 1), mar = c(4, 4, 4, 4), oma = c(0, 0, 0, 0))
+    }
+    
+    # adjust default margins if plot title is not shown
+    if(is.null(margin_vec)){
+      if(show_plot_title){
+        margin_vec = c(5.1, 4.1, 4.1, 2.1) # equal to default
+      } else {
+        margin_vec = c(4, 4, 2, 2)
+      }
+    }
+    
+    if (set_par) {
+      mfrow_original <- par()$mfrow
+      mar_original <- par()$mar
+      oma_original <- par()$oma
+      par(mfrow = c(1, 1), mar = margin_vec, oma = c(0, 0, 0, 0))
     }
     
     if (chr[1] == "all") {
@@ -374,14 +426,22 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
     
     ## plot canvas
     .plot_canvas(object = object, chr = chr, 
-                 ylim = ylim, main = main[[i]], centromere = centromere)
+                 ylim = ylim, main = main[[i]], centromere = centromere,
+                 show_plot_title = show_plot_title,
+                 axis_labels_color = axis_labels_color,
+                 coord_system_color = coord_system_color)
     
     ## plot log2 ratios
     .plot_bin_ratios(object = object, i = i, ylim = ylim, bins_cex = bins_cex,
-                     cols = cols, chr.cumsum0 = chr.cumsum0)
+                     cols = cols, 
+                     chr.cumsum0 = chr.cumsum0,
+                     point_size_factor = point_size_factor)
     
     ## plot segmentation
-    .plot_segmentation(object = object, i = i, ylim = ylim, chr.cumsum0 = chr.cumsum0)
+    .plot_segmentation(object = object, i = i, 
+                       ylim = ylim, 
+                       chr.cumsum0 = chr.cumsum0, 
+                       seg_line_color = seg_line_color)
     
     
     ## find genes duplicated between 'detail' and 'focal'
@@ -411,7 +471,8 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
         .plot_gene_range_ratios_human(gene_ranges = object@anno@detail, 
                                       gene_ratio_vec = object@detail$ratio[[i]], 
                                       ratio_shift = object@bin$shift[[i]], 
-                                      name_column = "name", color = "black", 
+                                      name_column = "name", 
+                                      color = detail_gene_anno_color, 
                                       ylim = ylim,
                                       chr.cumsum0 = chr.cumsum0, 
                                       exclude_gene_names = duplicated_gene_vec,
@@ -440,7 +501,7 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
                                     exclude_gene_names = setdiff(object@anno@detail$name, duplicated_gene_vec),  #note: this only leaves the intersection
                                     ratio_shift = object@bin$shift[[i]], 
                                     name_column = "name", 
-                                    color = "red", 
+                                    color = focal_gene_anno_color, 
                                     ylim = ylim, 
                                     chr.cumsum0 = chr.cumsum0,
                                     avoid_overlap = avoid_overlap)
@@ -457,7 +518,7 @@ setMethod("CNV.genomeplot", signature(object = "CNV.analysis"), function(object,
                                     exclude_gene_names = duplicated_gene_vec,  #note: this only leaves non-duplciated genes from focal
                                     ratio_shift = object@bin$shift[[i]], 
                                     name_column = "GENE_SYMBOL", 
-                                    color = "red", 
+                                    color = focal_gene_anno_color, 
                                     ylim = ylim,
                                     chr.cumsum0 = chr.cumsum0,
                                     avoid_overlap = avoid_overlap)
