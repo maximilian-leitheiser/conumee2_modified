@@ -148,8 +148,6 @@
   p_size = .get_p_size(var_vec = object@bin$variance[[i]][names(object@anno@bins)], 
                        bins_cex = bins_cex)
   p_size = p_size * point_size_factor
-  print("======== p_size vec ========")
-  print(p_size)
   
   # get color for each bin ratio
   bin.ratio.cols = .get_colors_for_value(value_vec = bin.ratio, cols = cols, ylim = ylim)
