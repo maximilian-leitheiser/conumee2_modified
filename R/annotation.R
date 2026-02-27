@@ -451,6 +451,7 @@
 #' @import IRanges
 #' @import GenomeInfoDb
 #' @importFrom rtracklayer import
+#' @importFrom stringr str_split
 NULL
 
 
