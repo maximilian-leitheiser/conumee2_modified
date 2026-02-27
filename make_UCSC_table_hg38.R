@@ -6,7 +6,7 @@ centromeres = read.csv("/media/Leia/shared/Scripts/Methylation/max_scripts/manif
 
 tbl_UCSC_hg38 = list(chromInfo = chromInfo, gap = gap, cytoBand = cytoBand, centromeres = centromeres)
 tbl_UCSC_hg38 = lapply(tbl_UCSC_hg38, function(tbl){
-  names(tbl)[[1]] = str_sub(names(tbl)[[1]], start = 3)
+  names(tbl)[[1]] = stringr::str_sub(names(tbl)[[1]], start = 3)
   tbl
 })
-save(list = "tbl_UCSC_hg38", file = "/home/leitheim/CNV_analysis/conumee2/conumee2_modified/data/tbl_UCSC_hg38.rda")
+save(list = "tbl_UCSC_hg38", file = "/mnt/nas/private/leitheim/conumee_current/conumee2_modified/data/tbl_UCSC_hg38.rda")
