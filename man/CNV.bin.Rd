@@ -7,7 +7,7 @@
 \usage{
 CNV.bin(object, ...)
 
-\S4method{CNV.bin}{CNV.analysis}(object)
+\S4method{CNV.bin}{CNV.analysis}(object, verbose = FALSE)
 }
 \arguments{
 \item{object}{\code{CNV.analysis} object.}

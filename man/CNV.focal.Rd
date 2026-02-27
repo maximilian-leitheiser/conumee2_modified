@@ -13,6 +13,7 @@ CNV.focal(object, ...)
   R = 100,
   blockLength = 5e+05,
   proportionLength = TRUE,
+  verbose = FALSE,
   ...
 )
 }

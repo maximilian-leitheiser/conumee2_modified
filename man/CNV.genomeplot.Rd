@@ -23,7 +23,16 @@ CNV.genomeplot(object, ...)
   width = 12,
   height = 6,
   res = 720,
-  cols = c("darkblue", "darkblue", "lightgrey", "#F16729", "#F16729"),
+  show_plot_title = TRUE,
+  margin_vec = NULL,
+  cols = c("#AD494A", "#AD494A", "#AD494A", "#AD494A", "#ECF0F1", "#74C476", "#74C476",
+    "#74C476", "#74C476"),
+  seg_line_color = "#2B3E51",
+  detail_gene_anno_color = "#2B3E51",
+  focal_gene_anno_color = "#2B3E51",
+  axis_labels_color = "#2C3E51",
+  coord_system_color = "#E8ECEF",
+  point_size_factor = 1,
   avoid_overlap = TRUE
 )
 }

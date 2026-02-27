@@ -14,7 +14,8 @@ CNV.segment(object, ...)
   min.width = 5,
   undo.splits = "sdundo",
   undo.SD = 2.2,
-  verbose = 0,
+  verbose_DNAcopy = 0,
+  verbose = FALSE,
   ...
 )
 }
