@@ -1,9 +1,16 @@
 #### aux functions ####
 # TODO: deal more clearly with genome information, especially XY chromosome in focal detection
 # TODO: make .create_focal_ranges use genome info from anno_object instead of 'Seqinfo(hg19)'
-.create_focal_ranges = function(genome_info){
+.create_focal_ranges = function(genome_info, ref_gene){
   # load Cancer Genome Census information
-  CGC_df = Cosmic_CancerGeneCensus_v99_GRCh37
+  if(ref_gene == "hg19"){
+    CGC_df = Cosmic_CancerGeneCensus_v99_GRCh37
+  } else if (ref_gene == "hg38") {
+    CGC_df = Cosmic_CancerGeneCensus_v99_GRCh38
+  } else {
+    stop("ref_gene ", ref_gene, "not recognized. Must be 'hg19' or 'hg38'.")
+  }
+
   rownames(CGC_df) = CGC_df$GENE_SYMBOL
   CGC_df = CGC_df[!(is.na(CGC_df$GENOME_START) | is.na(CGC_df$GENOME_STOP)), ]
   
@@ -219,7 +226,7 @@
   ## cancer genes
   # TODO: does not work yet for hg38
   message("importing cancer-related genes for focal analysis")
-  anno_object@cancer_genes = .create_focal_ranges(genome_info = anno_object@genome)
+  anno_object@cancer_genes = .create_focal_ranges(genome_info = anno_object@genome, ref_gene = ref_gene)
   
   ## creating bins
   message("creating bins")
