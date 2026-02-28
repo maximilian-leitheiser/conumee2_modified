@@ -42,7 +42,14 @@ NULL
 
 #' Cosmic_CancerGeneCensus_v99_GRCh37
 #' @name Cosmic_CancerGeneCensus_v99_GRCh37
-#' @description Curated collection of genes with oncological relevance. 
+#' @description Curated collection of genes with oncological relevance for hg19 reference genome.
+#' @details Created as shown in \code{make_CGC_dataframe.R}.
+#' @author Maximilian Leitheiser \email{maximilian.leitheiser@charite.com}
+NULL
+
+#' Cosmic_CancerGeneCensus_v99_GRCh38
+#' @name Cosmic_CancerGeneCensus_v99_GRCh38
+#' @description Curated collection of genes with oncological relevance for hg38 reference genome.
 #' @details Created as shown in \code{make_CGC_dataframe.R}.
 #' @author Maximilian Leitheiser \email{maximilian.leitheiser@charite.com}
 NULL
