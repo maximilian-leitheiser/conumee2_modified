@@ -139,21 +139,16 @@
     }
     
     if (is.element(array_type, "EPICv2")) {
+      # get probe annotations
       message("getting EPICv2 annotations")
       probesEPICv2 <- sesameData::sesameDataGet("EPICv2.address")$hg38
-      probesEPICv2 <- sort(probesEPICv2, ignore.strand = TRUE)
       probesEPICv2$genes = "NA"
       
-      # TODO: collapsing is done inefficiently
-      is_ctl_probe = grepl(pattern = "ctl", x = names(probesEPICv2))
-      prefix_vec = names(probesEPICv2)
-      prefix_vec[!is_ctl_probe]  = sapply(str_split(names(probesEPICv2[!is_ctl_probe]), "_"), head, 1)
-      
-      probes_EPICv2_coll = probesEPICv2[!duplicated(prefix_vec)]
-      is_ctl_probe = grepl(pattern = "ctl", x = names(probes_EPICv2_coll))
-      names(probes_EPICv2_coll)[!is_ctl_probe] = sapply(str_split(names(probes_EPICv2_coll)[!is_ctl_probe], "_"), head, 1)
-      
-      probesEPICv2 <- sort(probes_EPICv2_coll, ignore.strand = TRUE)
+      # collapse EPICv2 probes
+      probesEPICv2 = .collapse_gr_to_pfx(gr = probesEPICv2)
+
+      # sort probes
+      probesEPICv2 <- sort(probesEPICv2, ignore.strand = TRUE)
     }
     
   } else {
@@ -446,6 +441,51 @@
   return(out)
 }
 
+
+
+#' Collapse GRanges by Name Prefix
+#'
+#' Reduces a GRanges object by keeping only the first entry for each unique 
+#' name prefix.
+#'
+#' @param gr A GenomicRanges object with names.
+#' @param collapse_sesame_control_probes Logical. If `TRUE`, probes starting 
+#'   with "ctl" are treated as unique entries (not collapsed). Defaults to `FALSE`.
+#'
+#' @return A sorted GRanges object with renamed entries (prefix only).
+.collapse_gr_to_pfx <- function(gr, collapse_sesame_control_probes = FALSE) {
+  
+  # validate input
+  nm <- names(gr)
+  if (is.null(nm)) stop("The input GRanges object must have names.")
+  
+  # vectorized prefix extraction
+  # replaces first underscore and everything following it with empty string
+  pfx <- sub("_.*", "", nm)
+  
+  # handle Control Probes
+  if (collapse_sesame_control_probes) {
+    is_ctl <- startsWith(nm, "ctl")
+    
+    # for controls, overwrite the prefix with the full name.
+    if (any(is_ctl)) {
+      pfx[is_ctl] <- nm[is_ctl]
+    }
+  }
+  
+  # deduplication
+  # duplicated() returns TRUE for 2nd, 3rd occurrence. !duplicated() gives the boolean index of the FIRST occurrence.
+  keep_idx <- !duplicated(pfx)
+  
+  # subset and rename
+  gr_out <- gr[keep_idx]
+  
+  # assign the calculated prefixes as the new names
+  names(gr_out) <- pfx[keep_idx]
+
+  # return
+  return(gr_out)
+}
 
 
 #### main functions ####
