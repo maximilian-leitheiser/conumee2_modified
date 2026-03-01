@@ -1,7 +1,7 @@
 Package: conumee2.modified
 Title: Enhanced copy-number variation analysis using Illumina DNA methylation
     arrays for humans and mice
-Version: 0.1.5
+Version: 0.2.0
 Author: Maximilian Leitheiser
 Maintainer: Maximilian Leitheiser <maximilian.leitheiser@charite.com>
 Address: Institute of Pathology, Charité, Berlin
